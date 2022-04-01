@@ -1,0 +1,7 @@
+14_Garage_01_F1_floorplan.txt
+14_Garage_01_F2_floorplan.txt
+11_MedOffice_05_B1_floorplan.txt
+11_MedOffice_05_F1_floorplan.txt
+11_MedOffice_05_F2_floorplan.txt
+11_MedOffice_05_F3_floorplan.txt
+11_MedOffice_05_F4_floorplan.txt

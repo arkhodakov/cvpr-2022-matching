@@ -1,0 +1,6 @@
+02_TallOffice_01_B1_floorplan.txt
+02_TallOffice_01_F2_floorplan.txt
+02_TallOffice_01_F3_floorplan.txt
+02_TallOffice_01_F4_floorplan.txt
+02_TallOffice_01_F5_floorplan.txt
+02_TallOffice_01_F6_floorplan.txt
