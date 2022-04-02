@@ -1,3 +1,4 @@
+from xmlrpc.client import Boolean
 import cv2
 import json
 import typer
@@ -5,13 +6,15 @@ import logging
 
 import ezdxf
 from ezdxf.document import Drawing
-
-import vertices
 from pathlib import Path
 from typing import Optional
 
-from utils import load_logger
-load_logger()
+import config
+import endpoints
+import matching
+import utils
+
+utils.load_logger()
 
 
 app = typer.Typer()
@@ -31,7 +34,7 @@ def export_json(
     document: Drawing = ezdxf.readfile(path)
 
     logging.info("Extracting vertices to a dictionary format.")
-    extraction = vertices.extract_json(document, remove_empty_layers, remove_empty_vertices)
+    extraction = endpoints.exportJSON(document, config.layerlist, remove_empty_layers, remove_empty_vertices)
 
     outputpath = outputpath or path.parent.joinpath(f"{path.name.split('.')[0]}-output.json")
     with open(outputpath, "w+", encoding="utf-8") as out:
@@ -50,9 +53,8 @@ def plot(
     document: Drawing = ezdxf.readfile(path)
 
     logging.info("Plotting vertices to a numpy image.")
-    layerlist = ["A-WALL", "A-GLAZ", "A-DOOR", "A-DOOR-FRAM"]
-    structures = vertices.extract(document, normalize=True, layerlist=layerlist)
-    origin = vertices.plot(structures, document)
+    structures = endpoints.getStructures(document, layerlist=config.layerlist)
+    origin = utils.plotStructures(structures, document)
     cv2.imshow("Preview", origin)
     cv2.waitKey(0)
 
@@ -64,14 +66,14 @@ def plot(
 def match(
     gtpath: Path = typer.Argument(..., help="Path to a GT dxf file", exists=True, file_okay=True, dir_okay=False),
     tgpach: Path = typer.Argument(..., help="Path to a GT dxf file", exists=True, file_okay=True, dir_okay=False),
+    apply_matrix: Optional[Boolean] = typer.Option(True, help="Whether apply transformation matrix to the target")
 ):
     logging.info("Reading the models..")
     gtdoc: Drawing = ezdxf.readfile(gtpath)
     tgdoc: Drawing = ezdxf.readfile(tgpach)
 
     logging.info("Matching models...")
-    layerlist = ["I-WALL", "A-WALL", "A-GLAZ", "A-DOOR", "A-DOOR-FRAM"]
-    vertices.match(gtdoc, tgdoc, layerlist=layerlist)
+    matching.match(gtdoc, tgdoc, config.layerlist, apply_matrix)
 
 
 if __name__ == "__main__":

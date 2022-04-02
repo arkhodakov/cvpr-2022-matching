@@ -36,3 +36,10 @@ Top-down view of a user's (red) prediction and ground-truth (blue) model.
 Matrix transformation output:
 
 ![Target](.github/assets/matching-results-04022022.png)
+
+### Reproduce:
+
+```bash
+cd python
+python main.py match ../data/test/Annex/22_Annex_01_f01_3dmodel.dxf ../data/users/Annex/22_Annex_01_F1_s0p01m.dxf
+```
