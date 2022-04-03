@@ -2,7 +2,7 @@
 
 ## 4/2/2022 - Matching
 
-RigidRegistration matching method was applied. The rotation of the target model is pretty close to the source CAD model, but its scale is not enough.
+RigidRegistrationnoScale matching method was applied. The rotation of the target model is pretty close to the source CAD model, but its scale is not enough.
 
 On the picture:
 - Blue - ground-truth model.
@@ -10,6 +10,10 @@ On the picture:
 - Green - rotated and translated model with the matching algorithm.
 
 ![Source](.github/assets/matching-results-04032022.jpg)
+
+RigidRegistration from pycpd library solved the problem with scale.
+
+![Source](.github/assets/matching-results-rigidregistration-04032022.jpg)
 
 
 ## 4/2/2022 - Matching
