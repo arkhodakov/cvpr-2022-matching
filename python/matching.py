@@ -14,16 +14,17 @@ def align_cpp(gtmatrix: np.ndarray, tgmatrix: np.ndarray) -> Tuple[np.ndarray, n
 
 def align_python(gtmatrix: np.ndarray, tgmatrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     from functools import partial
-    from RigidRegistration import RigidRegistrationnoScale as Registration
+    from pycpd import RigidRegistration
 
     logging.debug("Using RigidRegistration implementation to calculate the matrix...")
     def print_iter(iteration, error, X, Y):
         print(f"[RigidRegistration] Matching iter: {iteration}, error: {error:.2f}", end="\r")
 
     callback = partial(print_iter)
-    reg = Registration(**{'X': gtmatrix, 'Y': tgmatrix})
-    TY, (R, t) = reg.register(callback)
-    return (R, t)
+    reg = RigidRegistration(**{'X': gtmatrix, 'Y': tgmatrix})
+    TY, (s, R, t) = reg.register(callback)
+    return (s, R, t)
+
 
 def match(
     gtdoc: Drawing,
@@ -47,12 +48,15 @@ def match(
     if apply_matrix:
         transformed = tgmatrix.copy()
         if config.use_cpp_matching:
-            R, t = align_python(gtmatrix, tgmatrix)
+            s, R, t = align_cpp(gtmatrix, tgmatrix)
+            print(f"Alignment: \rR: {R}\nt: {t}\ns: {s}")
         else:
-            R, t = align_python(gtmatrix, tgmatrix)
+            s, R, t = align_python(gtmatrix, tgmatrix)
+            print(f"Alignment: \rR: {R}\nt: {t}\ns: {s}")
 
         t = -np.dot(np.mean(transformed, 0), R) + t + np.mean(gtmatrix, 0)
         transformed = np.dot(transformed, R) + t
+        transformed *= s
 
         origin = utils.plotEndpoints(transformed, tgfaces, width, height, monocolor=(0, 255, 0), origin=origin)
 
