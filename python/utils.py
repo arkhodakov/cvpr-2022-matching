@@ -15,6 +15,26 @@ def load_logger():
         config = yaml.safe_load(f.read())
         logging.config.dictConfig(config)
 
+def plotEndpoints(
+    vertices: np.ndarray,
+    layers: np.ndarray,
+    width: int = 512, height: int = 512, depth: int = 512,
+    monocolor: Tuple = None, origin: np.ndarray = None
+) -> np.ndarray:
+    """ Plot all `Polyline` entities from the document."""
+    scale: np.ndarray = np.array([width, height, depth], dtype=np.int32)
+    margin: np.ndarray = (scale / 2).astype(np.int32)
+    color = monocolor or (0, 0, 0)
+
+    origin: np.ndarray = origin if origin is not None else np.full((height, width, 3), 255, dtype=np.uint8)
+    faces = np.split(vertices, np.unique(layers[:, 0], return_index=True)[1])
+    for face in tqdm(faces, desc="Plotting", leave=False):
+        for i in range(0, len(face) - 1):
+            pt1 = np.array(face[i] * scale + margin, dtype=np.int32)
+            pt2 = np.array(face[i + 1] * scale + margin, dtype=np.int32)
+            cv2.line(origin, tuple(pt1[:2]), tuple(pt2[:2]), tuple(color), 1)
+    return origin
+
 def plotStructures(
     structures: List[Dict],
     document: Drawing,

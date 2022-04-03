@@ -11,20 +11,20 @@ from tqdm import tqdm
 from typing import Dict, List, Tuple, Iterator
 
 
-def _iterate_over_entities(document: Drawing, layerlist: List[str] = list()) -> Iterator[Polyline]:
+def _iterate_over_entities(document: Drawing, layerslist: List[str] = list()) -> Iterator[Polyline]:
     for entity in tqdm(document.modelspace(), desc="Entities", leave=False):
         if entity.dxftype() != "POLYLINE":
             continue
         entity: Polyline = entity
 
-        if layerlist and entity.dxf.layer not in layerlist:
+        if layerslist and entity.dxf.layer not in layerslist:
             continue
         
         yield entity
 
 def exportJSON(
     document: Drawing,
-    layerlist: List[str] = list(),
+    layerslist: List[str] = list(),
     remove_empty_layers: bool = True,
     remove_empty_vertices: bool = True
 ) -> Dict:
@@ -44,7 +44,7 @@ def exportJSON(
         }
         mapping[layer.dxf.name] = f"layer_{index}"
 
-    for entity in _iterate_over_entities(document, layerlist):
+    for entity in _iterate_over_entities(document, layerslist):
         points: List[Dict] = layers[mapping[entity.dxf.layer]]["points"]
         vertices: List[DXFVertex] = entity.vertices
 
@@ -72,37 +72,45 @@ def exportJSON(
 def getEndpoints(
     document: Drawing,
     normalize: bool = True,
-    layerlist: List[str] = list()
+    layerslist: List[str] = list(),
+    return_faces: bool = False
 ) -> np.ndarray:
-    vertices = []
-    for entity in _iterate_over_entities(document, layerlist):
+    vertices: List[List] = []
+    layers: List[str] = []
+    for entity in _iterate_over_entities(document, layerslist):
         faces: List[List[DXFVertex]] = []
         if entity.is_poly_face_mesh:
             faces = entity.faces()       
         else:
             faces = [entity.vertices]
 
-        for face in faces:
+        for index, face in enumerate(faces):
             for vertex in face:
                 if vertex.dxf.location == Vec3(0, 0, 0):
                     continue
-                x, y, z = vertex.dxf.location.xyz
-                vertices.append([x, y, z])
+                vertices.append(vertex.dxf.location.xyz)
+                layers.append([index, entity.dxf.layer])
     vertices = np.array(vertices, dtype=np.float32)
+    layers = np.array(layers, dtype=np.object)
 
     if normalize:
-        vertices = vertices / np.linalg.norm(vertices)
-    return vertices
+        vertices = (vertices - np.min(vertices)) / (np.max(vertices) - np.min(vertices))
+        vertices = vertices - vertices.mean(0)
+
+    if return_faces:
+        return vertices, layers
+    else:
+        return vertices
 
 def getStructures(
     document: Drawing,
     normalize: bool = True,
-    layerlist: List[str] = list()
+    layerslist: List[str] = list()
 ) -> List[Dict]:
     xnorm, ynorm, znorm = [0, 0], [0, 0], [0, 0]
 
     structures: List = []
-    for entity in _iterate_over_entities(document, layerlist):
+    for entity in _iterate_over_entities(document, layerslist):
         description: Dict = {
             "layer": entity.dxf.layer,
             "faces": [],
@@ -129,7 +137,11 @@ def getStructures(
 
     if normalize:
         logging.debug(f"Normalization (min, max): X {xnorm}, Y {ynorm}, Z {znorm}")
-        norm = lambda a, limits: (a - limits[0]) / (limits[1] - limits[0])
+        def norm (a, limits):
+            # a -= ((limits[1] - limits[0]) / 2)
+            a = (a - limits[0]) / (limits[1] - limits[0])
+            return a
+
         for structure in structures:
             for face in structure["faces"]:
                 for index, (x, y, z) in enumerate(face):

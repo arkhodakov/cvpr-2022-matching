@@ -1,4 +1,3 @@
-from xmlrpc.client import Boolean
 import cv2
 import json
 import typer
@@ -34,7 +33,7 @@ def export_json(
     document: Drawing = ezdxf.readfile(path)
 
     logging.info("Extracting vertices to a dictionary format.")
-    extraction = endpoints.exportJSON(document, config.layerlist, remove_empty_layers, remove_empty_vertices)
+    extraction = endpoints.exportJSON(document, config.layerslist, remove_empty_layers, remove_empty_vertices)
 
     outputpath = outputpath or path.parent.joinpath(f"{path.name.split('.')[0]}-output.json")
     with open(outputpath, "w+", encoding="utf-8") as out:
@@ -53,7 +52,7 @@ def plot(
     document: Drawing = ezdxf.readfile(path)
 
     logging.info("Plotting vertices to a numpy image.")
-    structures = endpoints.getStructures(document, layerlist=config.layerlist)
+    structures = endpoints.getStructures(document, layerslist=config.layerslist)
     origin = utils.plotStructures(structures, document)
     cv2.imshow("Preview", origin)
     cv2.waitKey(0)
@@ -66,14 +65,14 @@ def plot(
 def match(
     gtpath: Path = typer.Argument(..., help="Path to a GT dxf file", exists=True, file_okay=True, dir_okay=False),
     tgpach: Path = typer.Argument(..., help="Path to a GT dxf file", exists=True, file_okay=True, dir_okay=False),
-    apply_matrix: Optional[Boolean] = typer.Option(True, help="Whether apply transformation matrix to the target")
+    apply_matrix: Optional[bool] = typer.Option(True, help="Whether apply transformation matrix to the target")
 ):
     logging.info("Reading the models..")
     gtdoc: Drawing = ezdxf.readfile(gtpath)
     tgdoc: Drawing = ezdxf.readfile(tgpach)
 
     logging.info("Matching models...")
-    matching.match(gtdoc, tgdoc, config.layerlist, apply_matrix)
+    matching.match(gtdoc, tgdoc, config.layerslist, apply_matrix)
 
 
 if __name__ == "__main__":
