@@ -67,14 +67,12 @@ def plot(
 def match(
     gtpath: Path = typer.Argument(..., help="Path to a GT dxf file", exists=True, file_okay=True, dir_okay=False),
     tgpach: Path = typer.Argument(..., help="Path to a GT dxf file", exists=True, file_okay=True, dir_okay=False),
-    apply_matrix: Optional[bool] = typer.Option(True, help="Whether apply transformation matrix to the target")
 ):
     logging.info("Reading the models..")
     gtdoc: Drawing = ezdxf.readfile(gtpath)
     tgdoc: Drawing = ezdxf.readfile(tgpach)
 
-    logging.info("Matching models...")
-    matching.match(gtdoc, tgdoc, config.layerslist, apply_matrix)
+    matching.match(gtdoc, tgdoc, config.layerslist)
 
 
 if __name__ == "__main__":

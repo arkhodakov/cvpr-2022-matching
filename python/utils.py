@@ -18,12 +18,16 @@ def load_logger():
 def plot_endpoints(
     vertices: np.ndarray,
     layers: np.ndarray,
-    width: int = 512, height: int = 512, depth: int = 512,
+    width: int = 640, height: int = 640, depth: int = 640,
     monocolor: Tuple = None, origin: np.ndarray = None
 ) -> np.ndarray:
     """ Plot all `Polyline` entities from the document."""
-    scale: np.ndarray = np.array([width, height, depth], dtype=np.int32)
-    margin: np.ndarray = (scale / 2).astype(np.int32)
+    vertices = (vertices - vertices.min()) / (vertices.max() - vertices.min())
+    vertices = vertices - vertices.mean(0)
+
+    padding: float = 0.8
+    scale: np.ndarray = np.array([width, height, depth], dtype=np.int32) * padding
+    margin: np.ndarray = (scale / 2 / padding).astype(np.int32)
     color = monocolor or (0, 0, 0)
 
     origin: np.ndarray = origin if origin is not None else np.full((height, width, 3), 255, dtype=np.uint8)

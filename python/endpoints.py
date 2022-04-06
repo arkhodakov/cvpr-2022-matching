@@ -1,14 +1,11 @@
-import cv2
-import ezdxf
 import numpy as np
 import logging
-import pygicp
 
 from ezdxf.document import Drawing
 from ezdxf.math import Vec3
 from ezdxf.entities.polyline import DXFVertex, Polyline
 from tqdm import tqdm
-from typing import Dict, List, Tuple, Iterator
+from typing import Dict, List, Tuple, Union, Iterator
 
 
 def _iterate_over_entities(document: Drawing, layerslist: List[str] = list()) -> Iterator[Polyline]:
@@ -71,10 +68,8 @@ def exportJSON(
 
 def get_endpoints(
     document: Drawing,
-    normalize: bool = True,
     layerslist: List[str] = list(),
-    return_faces: bool = False
-) -> np.ndarray:
+) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     vertices: List[List] = []
     layers: List[str] = []
     for entity in _iterate_over_entities(document, layerslist):
@@ -91,18 +86,9 @@ def get_endpoints(
                 vertices.append(vertex.dxf.location.xyz)
                 layers.append([index, entity.dxf.layer])
     vertices: np.ndarray = np.array(vertices, dtype=np.float32)
+    vertices = vertices - vertices.mean(0)
     layers: np.ndarray = np.array(layers, dtype=np.object)
-
-    source: np.ndarray = vertices.copy()
-
-    if normalize:
-        vertices = (vertices - vertices.min()) / (vertices.max() - vertices.min())
-        vertices = vertices - vertices.mean(0)
-
-    if return_faces:
-        return source, vertices, layers
-    else:
-        return source, vertices
+    return vertices, layers
 
 def get_structures(
     document: Drawing,
