@@ -15,7 +15,7 @@ def load_logger():
         config = yaml.safe_load(f.read())
         logging.config.dictConfig(config)
 
-def plotEndpoints(
+def plot_endpoints(
     vertices: np.ndarray,
     layers: np.ndarray,
     width: int = 512, height: int = 512, depth: int = 512,

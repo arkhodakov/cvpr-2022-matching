@@ -69,7 +69,7 @@ def exportJSON(
     output.update(layers)
     return output
 
-def getEndpoints(
+def get_endpoints(
     document: Drawing,
     normalize: bool = True,
     layerslist: List[str] = list(),
@@ -90,8 +90,8 @@ def getEndpoints(
                     continue
                 vertices.append(vertex.dxf.location.xyz)
                 layers.append([index, entity.dxf.layer])
-    vertices = np.array(vertices, dtype=np.float32)
-    layers = np.array(layers, dtype=np.object)
+    vertices: np.ndarray = np.array(vertices, dtype=np.float32)
+    layers: np.ndarray = np.array(layers, dtype=np.object)
 
     if normalize:
         vertices = (vertices - np.min(vertices)) / (np.max(vertices) - np.min(vertices))
@@ -102,7 +102,7 @@ def getEndpoints(
     else:
         return vertices
 
-def getStructures(
+def get_structures(
     document: Drawing,
     normalize: bool = True,
     layerslist: List[str] = list()

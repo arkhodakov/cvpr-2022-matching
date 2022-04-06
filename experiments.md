@@ -20,14 +20,14 @@ RigidRegistration from pycpd library solved the problem with scale.
 
 ``` python
 # Source variables
-gtmatrix -> ground-truth V3 matrix: [..., [x, y, z]]
-tgmatrix -> target (user) V3 matrix: [..., [x, y, z]]
+gt_normalized -> ground-truth V3 matrix: [..., [x, y, z]]
+tg_normalized -> target (user) V3 matrix: [..., [x, y, z]]
 
 # Matching algorithm
 # From: https://github.com/SMRT-AIST/fast_gicp
 gicp = pygicp.FastGICP()
-gicp.set_input_target(gtmatrix)
-gicp.set_input_source(tgmatrix)
+gicp.set_input_target(gt_normalized)
+gicp.set_input_source(tg_normalized)
 matrix = gicp.align()
 
 Matrix: 
