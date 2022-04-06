@@ -1,9 +1,15 @@
-﻿# CMakeList.txt : Top-level CMake project file, do global configuration
-# and include sub-projects here.
-#
-cmake_minimum_required (VERSION 3.8)
+cmake_minimum_required(VERSION 3.0.0)
+project(cvpr VERSION 0.1.0)
 
-project ("cvpr-2022")
+include(CTest)
+enable_testing()
 
-# Include sub-projects.
-add_subdirectory ("core")
+set(CMAKE_CUDA_COMPILER "/usr/local/cuda-11/bin/nvcc")
+
+add_subdirectory(core/pcl)
+add_subdirectory(core/pybind11)
+pybind11_add_module(cvpr core/cvpr.cpp)
+
+set(CPACK_PROJECT_NAME ${PROJECT_NAME})
+set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+include(CPack)
