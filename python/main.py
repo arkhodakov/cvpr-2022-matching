@@ -1,6 +1,7 @@
 import cv2
 import json
 import typer
+import dotenv
 import logging
 
 import ezdxf
@@ -13,6 +14,7 @@ import endpoints
 import matching
 import utils
 
+dotenv.load_dotenv()
 utils.load_logger()
 
 
@@ -52,7 +54,7 @@ def plot(
     document: Drawing = ezdxf.readfile(path)
 
     logging.info("Plotting vertices to a numpy image.")
-    structures = endpoints.getStructures(document, layerslist=config.layerslist)
+    structures = endpoints.get_structures(document, layerslist=config.layerslist)
     origin = utils.plotStructures(structures, document)
     cv2.imshow("Preview", origin)
     cv2.waitKey(0)

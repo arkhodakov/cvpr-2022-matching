@@ -93,14 +93,16 @@ def get_endpoints(
     vertices: np.ndarray = np.array(vertices, dtype=np.float32)
     layers: np.ndarray = np.array(layers, dtype=np.object)
 
+    source: np.ndarray = vertices.copy()
+
     if normalize:
-        vertices = (vertices - np.min(vertices)) / (np.max(vertices) - np.min(vertices))
+        vertices = (vertices - vertices.min()) / (vertices.max() - vertices.min())
         vertices = vertices - vertices.mean(0)
 
     if return_faces:
-        return vertices, layers
+        return source, vertices, layers
     else:
-        return vertices
+        return source, vertices
 
 def get_structures(
     document: Drawing,
