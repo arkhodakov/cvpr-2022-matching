@@ -110,8 +110,6 @@ def match(
 
         origin = utils.plot_endpoints(target.copy(), tg_faces, width, height, monocolor=(0, 255, 0), origin=origin)
 
- 
-
     """ Use Hungarian matching to find nearest points."""
     cost_matrix, match_rows, match_colls = lap(ground, target)
 
