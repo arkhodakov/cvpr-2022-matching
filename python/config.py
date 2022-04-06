@@ -14,4 +14,4 @@ enable_normalization: bool = True
 
 """ Accuracy thresholds specified in ground-truth units.
     The maximum is also used as LAP threshold value where the L2 norm is the default measurement."""
-accuracy_thresholds: List[float] = [25, 50, 75]
+accuracy_thresholds: List[float] = [0.25, 0.5, 0.75]
