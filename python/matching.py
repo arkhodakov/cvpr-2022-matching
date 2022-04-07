@@ -1,11 +1,11 @@
-from calendar import c
 import cv2
 import numpy as np
 import logging
 
+from collections import defaultdict
 from ezdxf.document import Drawing
 from scipy.optimize import linear_sum_assignment
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import calculations
 import config
@@ -50,24 +50,23 @@ def metrics(
     cost_matrix: np.ndarray,
     match_rows: List[int],
     match_colls: List[int]
-) -> np.ndarray:
+) -> None:
     logging.debug(f"Counting metrics...")
-    threshold: float = np.max(config.accuracy_thresholds)
-    matched_points: List = []
-    matched, mismatched = 0, 0
+    matches: Dict[List] = {threshold: [] for threshold in config.accuracy_thresholds}
 
-    for row in match_rows:
-        for col in match_colls:
-            distance: float = cost_matrix[row, col]
+    # Cost matrix consists of ground (rows / height) and target (colls / width)
+    height, width = cost_matrix.shape[:2]
+
+    for i in range(len(match_rows)):
+        row, col = match_rows[i], match_colls[i]
+        distance: float = cost_matrix[row, col]
+        for threshold in config.accuracy_thresholds:
             if distance < threshold:
-                matched_points.append((row, col, distance))
-                matched += 1
-            else:
-                mismatched += 1
+                matches[threshold].append(distance)
     # TODO: Calculate `precision` and `recall`.
-    logging.info(f"Matched: {matched}, mismatched: {mismatched}, accuracy: {(matched / (matched + mismatched) * 100):.2f}%")
-    matched_points: np.ndarray = np.array(matched_points, dtype=[("gt", "int32"), ("tg", "int32"), ("distance", "float32")])
-    return matched_points
+    for threshold, matched in matches.items():
+        logging.info(f"Threshold - {threshold:.2f} - matched: {len(matched)}, mismatched: {(width - len(matched))}, accuracy: {(len(matched) / width * 100):.2f}%")
+    # matched_points: np.ndarray = np.array(matched_points, dtype=[("gt", "int32"), ("tg", "int32"), ("distance", "float32")])
 
 def match(
     gtdoc: Drawing,
@@ -84,7 +83,7 @@ def match(
                     f"min {ground.min(0)}, size: {(ground.max(0) - ground.min(0))} "
                     f"(avg: {np.mean((ground.max(0) - ground.min(0))):.2f})")
     target, tg_faces = endpoints.get_endpoints(tgdoc, layerslist=layerslist)
-    logging.debug(f"Target endpoints: mean {target.mean():.2f}, max {target.max(0)}, "
+    logging.debug(f"Target endpoints: len  mean {target.mean():.2f}, max {target.max(0)}, "
                     f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
                     f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")
     
@@ -113,7 +112,7 @@ def match(
     """ Use Hungarian matching to find nearest points."""
     cost_matrix, match_rows, match_colls = lap(ground, target)
 
-    matched_points = metrics(cost_matrix, match_rows, match_colls)
+    metrics(cost_matrix, match_rows, match_colls)
     # TODO: Save output data.
 
     logging.debug("Showing preview data using OpenCV...")
