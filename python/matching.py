@@ -50,7 +50,7 @@ def metrics(
     cost_matrix: np.ndarray,
     match_rows: List[int],
     match_colls: List[int]
-) -> None:
+) -> Tuple[np.ndarray, Dict]:
     logging.debug(f"Counting metrics...")
     matches: Dict[List] = {threshold: [] for threshold in config.accuracy_thresholds}
 
@@ -63,10 +63,22 @@ def metrics(
         for threshold in config.accuracy_thresholds:
             if distance < threshold:
                 matches[threshold].append(distance)
-    # TODO: Calculate `precision` and `recall`.
+    metrics: Dict = defaultdict(dict)
+
     for threshold, matched in matches.items():
-        logging.info(f"Threshold - {threshold:.2f} - matched: {len(matched)}, mismatched: {(width - len(matched))}, accuracy: {(len(matched) / width * 100):.2f}%")
-    # matched_points: np.ndarray = np.array(matched_points, dtype=[("gt", "int32"), ("tg", "int32"), ("distance", "float32")])
+        # Calculate metrics according to `compute_precision_recall_helper`:
+        # https://github.com/seravee08/WarpingError_Floorplan/blob/main/IOU_precision_recall/ipynb/main.ipynb
+        precision: float = len(matched) / width
+        recall: float = len(matched) / height
+        f1: float = (2 * precision * recall) / (precision + recall)
+        metrics[threshold] = {
+            "matched": len(matched),
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
+        }
+    matched_points: np.ndarray = np.array(matched_points, dtype=[("gt", "int32"), ("tg", "int32"), ("distance", "float32")])
+    return (matched_points, )
 
 def match(
     gtdoc: Drawing,
@@ -90,7 +102,19 @@ def match(
     width, height = 512, 512
     origin: np.ndarray = np.full((width, height, 3), 255, dtype=np.uint8)
     origin = utils.plot_endpoints(ground.copy(), gt_faces, width, height, monocolor=(255, 0, 0), origin=origin)
-    origin = utils.plot_endpoints(target.copy(), tg_faces, width, height, monocolor=(0, 0, 255), origin=origin)
+    # origin = utils.plot_endpoints(target.copy(), tg_faces, width, height, monocolor=(0, 0, 255), origin=origin)
+
+    origin = cv2.cvtColor(origin, cv2.COLOR_BGR2GRAY)
+    origin[origin != 255] = 0
+
+    ret, thresh = cv2.threshold(origin,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    reduction = cv2.connectedComponents(thresh, 8, cv2.CV_32S)
+    print(reduction)
+
+    cv2.imshow("Preview (scaled)", origin)
+    cv2.waitKey(0)
+    exit()
 
     if config.enable_normalization:
         """ Use Coherent Point Drift Algorithm for preprocessing alignment.

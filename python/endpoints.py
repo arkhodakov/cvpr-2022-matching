@@ -14,7 +14,7 @@ def _iterate_over_entities(document: Drawing, layerslist: List[str] = list()) ->
             continue
         entity: Polyline = entity
 
-        if layerslist and entity.dxf.layer not in layerslist:
+        if layerslist and all([layer not in entity.dxf.layer for layer in layerslist]):
             continue
         
         yield entity
@@ -85,6 +85,9 @@ def get_endpoints(
                     continue
                 vertices.append(vertex.dxf.location.xyz)
                 layers.append([index, entity.dxf.layer])
+    if not vertices:
+        logging.critical("Vertices list does not contain any data. Exit.")
+        exit(-1)
     vertices: np.ndarray = np.array(vertices, dtype=np.float32)
     vertices = vertices - vertices.mean(0)
     layers: np.ndarray = np.array(layers, dtype=np.object)
