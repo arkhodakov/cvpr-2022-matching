@@ -7,4 +7,5 @@ __pycache__
 
 # Data & Build
 build
+data/**
 docs
