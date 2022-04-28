@@ -26,9 +26,13 @@ def read_endpoints(structures: np.ndarray) -> np.ndarray:
         
         width, depth, height = structure[6:9]
         w2, d2, h2 = (width / 2), (depth / 2), (height / 2)
-        
+
         d = np.array([(x2 - x1), (y2 - y1)], dtype=np.float32)
-        d /= np.linalg.norm(d + np.finfo(np.float32).eps)
+        if np.sum(d) == 0:
+            """Set `d` equals to 1 in case we have only one location: doors class"""
+            d = [1.0, 1.0]
+        else:
+            d /= np.linalg.norm(d + np.finfo(np.float32).eps)
 
         dx = -d[1] * w2
         dy = d[0] * d2
@@ -54,7 +58,7 @@ def read_structures(data: Dict) -> np.ndarray:
             x1, y1, z1 = structure.get("start_pt", structure.get("loc", [.0, .0, .0]))
             x2, y2, z2 = structure.get("end_pt", structure.get("loc", [.0, .0, .0]))
             width = structure.get("width", .0)
-            depth = structure.get("depth", .0)
+            depth = structure.get("depth", width)
             height = structure.get("height", 0)
             structureslist.append([
                 x1, y1, z1,
