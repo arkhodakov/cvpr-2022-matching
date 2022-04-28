@@ -3,13 +3,13 @@ import numpy as np
 import logging
 
 from collections import defaultdict
-from ezdxf.document import Drawing
 from scipy.optimize import linear_sum_assignment
 from typing import Dict, List, Tuple
 
 import calculations
 import config
-import endpoints
+import loader
+import iou
 import utils
 
 
@@ -39,20 +39,20 @@ def lap(
         Cost function between verticies is defined in `calculate_cost_matrix` method.
         Default: Euclidean distance (L2)."""
     cost_function = calculations.calculate_cost_matrix_numba if config.enable_optimization else calculations.calculate_cost_matrix
-    logging.debug("Calculating cost matrix using...")
+    logging.debug(f"Calculating cost matrix optimized: {config.enable_optimization}...")
     cost_matrix = cost_function(gt_normalized, tg_normalized)
 
     logging.debug("Applying linear_sum_assignment...")
     match_rows, match_colls = linear_sum_assignment(cost_matrix)
     return cost_matrix, match_rows, match_colls
 
-def metrics(
+def calculate_metrics(
     cost_matrix: np.ndarray,
     match_rows: List[int],
     match_colls: List[int]
 ) -> Tuple[np.ndarray, Dict]:
     logging.debug(f"Counting metrics...")
-    matches: Dict[List] = {threshold: [] for threshold in config.accuracy_thresholds}
+    matches: Dict[List] = defaultdict(list)
 
     # Cost matrix consists of ground (rows / height) and target (colls / width)
     height, width = cost_matrix.shape[:2]
@@ -60,7 +60,7 @@ def metrics(
     for i in range(len(match_rows)):
         row, col = match_rows[i], match_colls[i]
         distance: float = cost_matrix[row, col]
-        for threshold in config.accuracy_thresholds:
+        for threshold in config.metrics_thresholds:
             if distance < threshold:
                 matches[threshold].append(distance)
     metrics: Dict = defaultdict(dict)
@@ -77,44 +77,40 @@ def metrics(
             "recall": recall,
             "f1": f1
         }
-    matched_points: np.ndarray = np.array(matched_points, dtype=[("gt", "int32"), ("tg", "int32"), ("distance", "float32")])
-    return (matched_points, )
+    return metrics
+
+def calculate_iou(
+    gtendpoints: np.ndarray,
+    tgendpoints: np.ndarray
+):
+    return iou.box3d_iou(gtendpoints[120], tgendpoints[120])
 
 def match(
-    gtdoc: Drawing,
-    tgdoc: Drawing,
-    layerslist: List[str] = list()
+    gtstructures: np.ndarray,
+    tgstructures: np.ndarray
 ) -> None:
     """ Notations: `gtdoc` - ground-truth .dxf document. `tgdoc` - target (user's prediction) .dxf document."""
     logging.info("Matching models...")
-    np.set_printoptions(precision=2, suppress=True)
+    np.set_printoptions(precision=4, suppress=True)
 
-    logging.debug("Extracting vertices matrices from documents...")
-    ground, gt_faces = endpoints.get_endpoints(gtdoc, layerslist=layerslist)
-    logging.debug(f"Ground endpoints: mean {ground.mean():.2f}, max {ground.max(0)}, "
+    """logging.debug(f"Ground endpoints: mean {ground.mean():.2f}, max {ground.max(0)}, "
                     f"min {ground.min(0)}, size: {(ground.max(0) - ground.min(0))} "
                     f"(avg: {np.mean((ground.max(0) - ground.min(0))):.2f})")
     target, tg_faces = endpoints.get_endpoints(tgdoc, layerslist=layerslist)
     logging.debug(f"Target endpoints: len  mean {target.mean():.2f}, max {target.max(0)}, "
                     f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
-                    f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")
+                    f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")"""
     
-    width, height = 512, 512
+    gtendpoints = loader.read_endpoints(gtstructures)
+    tgendpoints = loader.read_endpoints(tgstructures)
+
+    width, height = 780, 780
     origin: np.ndarray = np.full((width, height, 3), 255, dtype=np.uint8)
-    origin = utils.plot_endpoints(ground.copy(), gt_faces, width, height, monocolor=(255, 0, 0), origin=origin)
-    # origin = utils.plot_endpoints(target.copy(), tg_faces, width, height, monocolor=(0, 0, 255), origin=origin)
+    origin = utils.plot_endpoints(gtendpoints, width, height, monocolor=(255, 0, 0), origin=origin)
+    origin = utils.plot_endpoints(tgendpoints, width, height, monocolor=(0, 0, 255), origin=origin)
 
-    origin = cv2.cvtColor(origin, cv2.COLOR_BGR2GRAY)
-    origin[origin != 255] = 0
-
-    ret, thresh = cv2.threshold(origin,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
-    reduction = cv2.connectedComponents(thresh, 8, cv2.CV_32S)
-    print(reduction)
-
-    cv2.imshow("Preview (scaled)", origin)
-    cv2.waitKey(0)
-    exit()
+    ground = gtendpoints.reshape(-1, 3)
+    target = tgendpoints.reshape(-1, 3)
 
     if config.enable_normalization:
         """ Use Coherent Point Drift Algorithm for preprocessing alignment.
@@ -130,15 +126,17 @@ def match(
         logging.debug(f"Aligned target endpoints: mean {target.mean():.2f}, max {target.max(0)}, "
             f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
             f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")
-
-        origin = utils.plot_endpoints(target.copy(), tg_faces, width, height, monocolor=(0, 255, 0), origin=origin)
+        origin = utils.plot_endpoints(target, width, height, monocolor=(0, 255, 0), origin=origin)
 
     """ Use Hungarian matching to find nearest points."""
-    cost_matrix, match_rows, match_colls = lap(ground, target)
+    # cost_matrix, match_rows, match_colls = lap(ground, target)
 
-    metrics(cost_matrix, match_rows, match_colls)
-    # TODO: Save output data.
+    # metrics = calculate_metrics(cost_matrix, match_rows, match_colls)
+    # print("Metrics: ", metrics)
+
+    iou = calculate_iou(gtendpoints, tgendpoints)
+    print("IoU: ", iou)
 
     logging.debug("Showing preview data using OpenCV...")
-    cv2.imshow("Preview (scaled)", origin)
-    cv2.waitKey(0)
+    """cv2.imshow("Preview (scaled)", origin)
+    cv2.waitKey(0)"""

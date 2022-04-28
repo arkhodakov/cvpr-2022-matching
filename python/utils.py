@@ -1,13 +1,10 @@
 import cv2
-import ezdxf
 import numpy as np
 import logging
 import logging.config
 import yaml
 
-from ezdxf.document import Drawing
-from tqdm import tqdm
-from typing import Dict, List, Tuple
+from typing import Tuple
 
 
 def load_logger():
@@ -15,57 +12,74 @@ def load_logger():
         config = yaml.safe_load(f.read())
         logging.config.dictConfig(config)
 
-def plot_endpoints(
-    vertices: np.ndarray,
-    layers: np.ndarray,
-    width: int = 640, height: int = 640, depth: int = 640,
+def plot_structures(
+    endpoints: np.ndarray,
+    width: int = 780, height: int = 780, depth: int = 780,
     monocolor: Tuple = None, origin: np.ndarray = None
 ) -> np.ndarray:
-    """ Plot all `Polyline` entities from the document."""
-    vertices = (vertices - vertices.min()) / (vertices.max() - vertices.min())
-    vertices = vertices - vertices.mean(0)
-
+    """ Plot stuctures from the endpoints."""
     padding: float = 0.8
-    scale: np.ndarray = np.array([width, height, depth], dtype=np.int32) * padding
-    margin: np.ndarray = (scale / 2 / padding).astype(np.int32)
+    scale: np.ndarray = np.array([width, height, depth], dtype=np.int32) * padding / 2
+    margin: np.ndarray = (np.array([width, height, depth]) / 2).astype(np.int32)
+
     color = monocolor or (0, 0, 0)
 
     origin: np.ndarray = origin if origin is not None else np.full((height, width, 3), 255, dtype=np.uint8)
-    faces = np.split(vertices, np.unique(layers[:, 0], return_index=True)[1])
-    for face in tqdm(faces, desc="Plotting", leave=False):
-        for i in range(0, len(face) - 1):
-            pt1 = np.array(face[i] * scale + margin, dtype=np.int32)
-            pt2 = np.array(face[i + 1] * scale + margin, dtype=np.int32)
-            cv2.line(origin, tuple(pt1[:2]), tuple(pt2[:2]), tuple(color), 1)
+    for structure in endpoints:
+        x1, y1, z1 = structure[:3] * scale + margin
+        x2, y2, z2 = structure[3:6] * scale + margin
+
+        pt1 = np.asarray([x1, y1, z1], dtype=np.int32)
+        pt2 = np.asarray([x2, y2, z2], dtype=np.int32)
+        cv2.line(origin, tuple(pt1[:2]), tuple(pt2[:2]), tuple(color), 1)
+
+        width, depth, height = structure[6:9] * scale
+        w2, d2, h2 = (width / 2), (depth / 2), (height / 2)
+        
+        dxy = np.array([(x2 - x1), (y2 - y1)], dtype=np.float32)
+        dxy = dxy / np.linalg.norm(dxy) 
+
+        dx = -dxy[1]
+        dy = dxy[0]
+
+        tl = (int(x2 - dx * w2), int(y2 - dy * d2))
+        tr = (int(x2 + dx * w2), int(y2 + dy * d2))
+        bl = (int(x1 - dx * w2), int(y1 - dy * d2))
+        br = (int(x1 + dx * w2), int(y1 + dy * d2))
+
+        cv2.line(origin, tl, tr, (0, 255, 0), 1)
+        cv2.line(origin, bl, br, (0, 255, 0), 1)
+        cv2.line(origin, tl, bl, (0, 255, 0), 1)
+        cv2.line(origin, br, tr, (0, 255, 0), 1)
     return origin
 
-def plotStructures(
-    structures: List[Dict],
-    document: Drawing,
-    width: int = 512, height: int = 512,
-    monocolor: Tuple = None, origin: np.ndarray = None,
-    matrix: np.ndarray = None,
-    margin: int = 0) -> np.ndarray:
-    """ Plot all `Polyline` entities from the document."""
+
+def plot_endpoints(
+    endpoints: np.ndarray,
+    width: int = 780, height: int = 780, depth: int = 780,
+    monocolor: Tuple = None, origin: np.ndarray = None
+) -> np.ndarray:
+    """ Plot stuctures from the endpoints."""
+    endpoints = endpoints.reshape(-1, 3)
+    endpoints = (endpoints - endpoints.min()) / (endpoints.max() - endpoints.min())
+    endpoints = endpoints - endpoints.mean(0)
+    endpoints = endpoints / endpoints.max()
+    endpoints = endpoints.reshape(-1, 4, 3)
+
+    padding: float = 0.8
+    scale: np.ndarray = np.array([width, height, depth], dtype=np.int32) * padding / 2
+    margin: np.ndarray = (np.array([width, height, depth]) / 2).astype(np.int32)
+
+    color = monocolor or (0, 0, 0)
+
     origin: np.ndarray = origin if origin is not None else np.full((height, width, 3), 255, dtype=np.uint8)
-    for description in tqdm(structures, desc="Plotting", leave=False):
-        layer = description["layer"]
-        for face in description["faces"]:
-            for i in range(0, len(face) - 1):
-                x1, y1, z1 = face[i]
-                x2, y2, z2 = face[i + 1]
-                color = monocolor or ezdxf.colors.aci2rgb(document.layers.get(layer).color or 0)
+    for endpoint in endpoints:
+        coordinates = endpoint[:4]
+        coordinates = coordinates * scale + margin
+        tl, tr, bl, br = coordinates[:, :2].astype(int)
 
-                if matrix is not None:
-                    x1, y1, z1 = np.dot(matrix[:3, :3], np.array([x1, y1, z1])) + matrix[:3, 3]
-                    x2, y2, z2 = np.dot(matrix[:3, :3], np.array([x2, y2, z2])) + matrix[:3, 3]
-
-                x1, y1, z1 = int(x1 * width), int(y1 * height), int(z1 * width)
-                x2, y2, z2 = int(x2 * width), int(y2 * height), int(z2 * width)
-
-                if margin > 0:
-                    # Vor the view only! Does not affect the model representation
-                    x1, y1, z1 = x1 - margin, y1 - margin, z1 - margin
-                    x2, y2, z2 = x2 - margin, y2 - margin, z2 - margin
-                cv2.line(origin, (x1, y1), (x2, y2), tuple(color), 2)
+        cv2.line(origin, tl, tr, color, 1)
+        cv2.line(origin, bl, br, color, 1)
+        cv2.line(origin, tl, bl, color, 1)
+        cv2.line(origin, br, tr, color, 1)
     return origin
