@@ -83,7 +83,8 @@ def calculate_iou(
     gtendpoints: np.ndarray,
     tgendpoints: np.ndarray
 ):
-    return iou.box3d_iou(gtendpoints[120], tgendpoints[120])
+    
+    return iou.box3d_iou(gtendpoints[56], tgendpoints[56])
 
 def match(
     gtstructures: np.ndarray,
@@ -101,6 +102,9 @@ def match(
                     f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
                     f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")"""
     
+    index = 56
+    print(f"Structure [{index}]: {gtstructures[index]}")
+
     gtendpoints = loader.read_endpoints(gtstructures)
     tgendpoints = loader.read_endpoints(tgstructures)
 
@@ -137,6 +141,6 @@ def match(
     iou = calculate_iou(gtendpoints, tgendpoints)
     print("IoU: ", iou)
 
-    logging.debug("Showing preview data using OpenCV...")
-    """cv2.imshow("Preview (scaled)", origin)
+    """logging.debug("Showing preview data using OpenCV...")
+    cv2.imshow("Preview (scaled)", origin)
     cv2.waitKey(0)"""
