@@ -6,11 +6,12 @@ from collections import defaultdict
 from scipy.optimize import linear_sum_assignment
 from typing import Dict, List, Tuple
 
-import calculations
 import config
 import loader
-import iou
 import utils
+
+from calculations.cost_matrix import calculate_cost_matrix
+from calculations.iou import iou_box
 
 
 def align(gt_normalized: np.ndarray, tg_normalized: np.ndarray) -> Tuple[float, np.ndarray, np.ndarray]:
@@ -38,9 +39,8 @@ def lap(
     """ Returns linear assignment problem solution using scipy Hungarian implementation.
         Cost function between verticies is defined in `calculate_cost_matrix` method.
         Default: Euclidean distance (L2)."""
-    cost_function = calculations.calculate_cost_matrix_numba if config.enable_optimization else calculations.calculate_cost_matrix
     logging.debug(f"Calculating cost matrix optimized: {config.enable_optimization}...")
-    cost_matrix = cost_function(gt_normalized, tg_normalized)
+    cost_matrix = calculate_cost_matrix(gt_normalized, tg_normalized)
 
     logging.debug("Applying linear_sum_assignment...")
     match_rows, match_colls = linear_sum_assignment(cost_matrix)
@@ -79,12 +79,29 @@ def calculate_metrics(
         }
     return metrics
 
+
 def calculate_iou(
+    gtstructures: np.ndarray,
     gtendpoints: np.ndarray,
+    tgstructures: np.ndarray,
     tgendpoints: np.ndarray
-):
-    
-    return iou.box3d_iou(gtendpoints[56], tgendpoints[56])
+) -> List[float]:
+    logging.debug("Calculating 3D IoU metric...")
+    ious = []
+    for i, ground in enumerate(gtstructures):
+        gclass = ground[9]
+        gious = []
+        for k, target in enumerate(tgstructures):
+            tclass = target[9]
+            if gclass != tclass:
+                continue
+            iou = iou_box(gtendpoints[i], tgendpoints[k])[0]
+            gious.append(iou)
+            if iou > .99:
+                break
+        ious.append(max(gious))
+    return np.asarray(ious)
+
 
 def match(
     gtstructures: np.ndarray,
@@ -101,10 +118,6 @@ def match(
     logging.debug(f"Target endpoints: len  mean {target.mean():.2f}, max {target.max(0)}, "
                     f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
                     f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")"""
-    
-    index = 56
-    print(f"Structure [{index}]: {gtstructures[index]}")
-
     gtendpoints = loader.read_endpoints(gtstructures)
     tgendpoints = loader.read_endpoints(tgstructures)
 
@@ -133,14 +146,14 @@ def match(
         origin = utils.plot_endpoints(target, width, height, monocolor=(0, 255, 0), origin=origin)
 
     """ Use Hungarian matching to find nearest points."""
-    # cost_matrix, match_rows, match_colls = lap(ground, target)
+    cost_matrix, match_rows, match_colls = lap(ground, target)
 
-    # metrics = calculate_metrics(cost_matrix, match_rows, match_colls)
-    # print("Metrics: ", metrics)
+    metrics = calculate_metrics(cost_matrix, match_rows, match_colls)
+    print("Metrics: ", metrics)
 
-    iou = calculate_iou(gtendpoints, tgendpoints)
-    print("IoU: ", iou)
+    ious = calculate_iou(gtstructures, gtendpoints, tgstructures, tgendpoints)
+    print(f"IoU: min {ious.min():.4f}, max {ious.max():.4f}, mean {ious.mean():.4f}, median {np.median(ious):.4f}, std {np.std(ious):.4f}")
 
-    """logging.debug("Showing preview data using OpenCV...")
+    logging.debug("Showing preview data using OpenCV...")
     cv2.imshow("Preview (scaled)", origin)
-    cv2.waitKey(0)"""
+    cv2.waitKey(0)

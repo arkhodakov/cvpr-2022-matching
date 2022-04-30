@@ -40,7 +40,7 @@ def read_endpoints(structures: np.ndarray) -> np.ndarray:
         # Points:   [0 -- , 1 -- , 2 -- , 3 -- , 4 -- , 5 -- , 6 -- , 7 -- ]
         x_corners = [x1-dx, x1-dx, x2+dx, x2+dx, x1-dx, x1+dx, x2+dx, x2-dx]
         y_corners = [y1-dy, y1+dy, y2-dy, y2+dy, y1-dy, y1+dy, y2-dy, y2+dy]
-        z_corners = [z1   , z1   , z1   , z1   , z2+h2, z2+h2, z2+h2, z2+h2]
+        z_corners = [z1   , z1   , z1   , z1   , z1+h2, z1+h2, z1+h2, z1+h2]
 
         corners = np.vstack([x_corners,y_corners,z_corners]).transpose()
         corners = corners
