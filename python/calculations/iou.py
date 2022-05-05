@@ -1,7 +1,7 @@
-import math
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import ConvexHull
+from typing import Tuple
 
 
 def polygon_clip(subjectPolygon, clipPolygon):
@@ -54,133 +54,101 @@ def polygon_clip(subjectPolygon, clipPolygon):
 
 def poly_area(x,y):
     """ Ref: http://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates """
-    return 0.5*np.abs(np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)))
+    # 1D implementation: 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+    return 0.5 * np.abs(np.sum(x * np.roll(y, 1, axis=-1), axis=-1) - np.sum(y * np.roll(x, 1, axis=-1), axis=-1))
 
 def convex_hull_intersection(p1, p2):
-    """ Compute area of two convex hull's intersection area.
-        p1,p2 are a list of (x,y) tuples of hull vertices.
-        return a list of (x,y) for the intersection and its volume
-    """
-    inter_p = polygon_clip(p1,p2)
-    if inter_p is not None:
-        hull_inter = ConvexHull(inter_p)
-        return inter_p, hull_inter.volume
-    else:
-        return None, 0.0  
+    result = np.zeros((p1.shape[0], p2.shape[0]))
+    for i in range(len(p1)):
+        for j in range(len(p2)):
+            inter_p = polygon_clip(p1[i], p2[j])
+            if inter_p is not None:
+                hull_inter = ConvexHull(inter_p)
+                result[i, j] = hull_inter.volume
+    return result
 
-def is_clockwise(p):
-    x = p[:,0]
-    y = p[:,1]
-    return np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)) > 0
+def counter_clockwise(rectangle: np.ndarray) -> np.ndarray:
+    x, y = rectangle[..., 0], rectangle[..., 1]
+    filter = np.sum(x * np.roll(y, 1, axis=-1), axis=-1) - np.sum(y * np.roll(x, 1, axis=-1), axis=-1) > 0
+    rectangle[filter] = rectangle[filter][:, ::-1]
+    return rectangle
 
-def get_angle(a, b, c):
-   angle = math.degrees(math.atan2(c[1]-b[1], c[0]-b[0]) - math.atan2(a[1]-b[1], a[0]-b[0]))
-   return angle + 360 if angle < 0 else angle
+def volume(corners) -> float:
+    """ corners: (8,3) no assumption on axis direction """
+    print(f"Calculating volume [{corners.shape}]: \n...")
+    width = np.sqrt(np.sum(np.power(corners[..., 0, :2] - corners[..., 1, :2], 2), axis=1))
+    print(" Width: ", width)
+    length = np.sqrt(np.sum(np.power(corners[..., 1, :2] - corners[..., 2, :2], 2), axis=1))
+    print(" Length: ", length)
+    height = np.abs(corners[..., 0, 2] - corners[..., 4, 2])
+    print(" Height: ", height)
+    return (width * length * height)
 
-def is_convex(points):
-   n = len(points)
-   for i in range(len(points)):
-      p1 = points[i-2]
-      p2 = points[i-1]
-      p3 = points[i]
-      if get_angle(p1, p2, p3) > 180:
-         return False
-   return True
+def iou_batch(
+    ground: np.ndarray,
+    target: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """ Compute 3D bounding box IoU.
 
-
-def box3d_vol(corners):
-    ''' corners: (8,3) no assumption on axis direction '''
-    a = np.sqrt(np.sum((corners[4,0] - corners[6,0])**2))
-    b = np.sqrt(np.sum((corners[2,1] - corners[3,1])**2))
-    c = np.sqrt(np.sum((corners[0,2] - corners[4,2])**2))
-    return a*b*c
-
-
-def iou_box(corners1, corners2):
-    ''' Compute 3D bounding box IoU.
-
-    Input:
-        corners1: numpy array (8,3), assume up direction is negative Y
-        corners2: numpy array (8,3), assume up direction is negative Y
-    Output:
+    Parameters:
+        ground: numpy array (n,8,3), assume up direction is Z
+        target: numpy array (n,8,3), assume up direction is Z
+    Return:
         iou: 3D bounding box IoU
         iou_2d: bird's eye view 2D bounding box IoU
+    """
+    minimal = np.min([np.min([ground, target]), .0])
+    ground -= minimal
+    target -= minimal
+    print("Minimal: ", minimal)
 
-    todo (rqi): add more description on corner points' orders.
-    '''
-    # corner points are in counter clockwise order
-    minimal = np.min([np.min(corners1), np.min(corners2)])
-    if minimal < 0:
-        corners1 -= minimal
-        corners2 -= minimal
+    print(f"Identical: {np.array_equal(ground, target)}")
+
+    gface = ground[:, :4][..., :2]
+    print(f"Ground Face [{gface.shape}, {gface.dtype}]: \n", gface[:1], "\n...")
+    tface = target[:, :4][..., :2]
+    print(f"Target Face [{tface.shape}, {tface.dtype}]: \n", tface[:1], "\n...")
     
-    indices = [2, 0, 1, 3] # [2, 0, 1, 3]
-    rect1 = corners1[indices][:, :2]
-    rect2 = corners2[indices][:, :2]
-    # print("Rectangles: ", rect1, rect2)
+    gface = counter_clockwise(gface)
+    print(f"Rect1 [{gface.shape}, {gface.dtype}].")
+    tface = counter_clockwise(tface)
+    print(f"Rect2 [{tface.shape}, {tface.dtype}].")
+    
+    garea = poly_area(gface[..., 0], gface[..., 1])
+    print(f"Area1 [{garea.shape}, {garea.dtype}]: \n", garea)
+    tarea = poly_area(tface[..., 0], tface[..., 1])
+    print(f"Area2 [{tarea.shape}, {tarea.dtype}]: \n", tarea)
 
-    area1 = poly_area(rect1[:, 0], rect1[:, 1])
-    area2 = poly_area(rect2[:, 0], rect2[:, 1])
-    # print("Areas: ", area1, area2)
+    inter_area = convex_hull_intersection(gface, tface)
+    print(f"Inter Area [{inter_area.shape}, {inter_area.dtype}]: \n", inter_area)
 
-    if is_clockwise(rect1):
-        rect1 = rect1[::-1]
-    if is_clockwise(rect2):
-        rect2 = rect2[::-1]
+    intersected_filter = np.argwhere(np.any(inter_area, axis=1)).ravel()
+    print("Intersected Filter: \n", intersected_filter)
 
-    inter_area = convex_hull_intersection(rect1, rect2)[1]
-    # print("Inter area: ", inter_area)
-    iou_2d = inter_area/(area1+area2-inter_area)
+    inter_area = inter_area[intersected_filter]
+    garea = garea[intersected_filter]
+    tarea = tarea[intersected_filter]
 
-    zmax = min(corners1[4, 2], corners2[4, 2])
-    zmin = max(corners1[0, 2], corners2[0, 2])
-    inter_vol = inter_area * max(0.0, zmax-zmin)
-    # print("Inter Vol: ", inter_vol)
-    vol1 = box3d_vol(corners1)
-    vol2 = box3d_vol(corners2)
-    # print("Vols: ", vol1, vol2)
-    iou = abs(inter_vol / (vol1 + vol2 - inter_vol))
-    return iou, iou_2d
+    iou_2d = inter_area / (np.tile(garea, (inter_area.shape[0], 1)) + np.tile(tarea, (inter_area.shape[0], 1)) - inter_area)
+    print("2D IoU: \n", iou_2d)
 
-def box3d_vol_batch(corners):
-    ''' corners: (n,8,3) no assumption on axis direction '''
-    l = np.sqrt(np.linalg.norm(corners[:, 1, :] - corners[:, 2, :], axis=1))
-    w = np.sqrt(np.linalg.norm(corners[:, 0, :] - corners[:, 1, :], axis=1))
-    h = np.sqrt(np.linalg.norm(corners[:, 0, :] - corners[:, 4, :], axis=1))
-    return l*w*h
+    ground_filtered = ground[intersected_filter]
+    target_filtered = target[intersected_filter]
 
-def iou_batch(batch_corners1, batch_corners2):
-    '''
-    Input:
-        batch_corners1: numpy array (n,8,3), assume up direction is negative Y
-        batch_corners2: numpy array (m,8,3), assume up direction is negative Y
-    Output:
-        batch_iou: 3D bounding box IoU (n,m)
-    '''
-    n = batch_corners1.shape[0]
-    m = batch_corners2.shape[1] #suppose m < n
+    zmax = np.min([ground_filtered[..., 4, 2], target_filtered[..., 4, 2]], axis=0)
+    zmin = np.max([ground_filtered[..., 0, 2], target_filtered[..., 0, 2]], axis=0)
+    difference = np.max([np.full_like(zmax, .0), zmax - zmin], axis=0)
+    print(f"Difference [{difference.shape}, {difference.dtype}]: \n", difference)
 
-    vol_batch1 = box3d_vol_batch(batch_corners1) #n
-    vol_batch2 = box3d_vol_batch(batch_corners2) #m
+    inter_vol = inter_area * difference
+    print("Inter Volume: \n", inter_vol)
 
-    y_max_batch1 = batch_corners1[:,0,1] #n
-    y_min_batch1 = batch_corners1[:,4,1] #n
-    y_max_batch2 = batch_corners2[:,0,1] #m
-    y_min_batch2 = batch_corners2[:,4,1] #m
+    vol1 = volume(ground_filtered)
+    print("Ground Volume: \n", vol1)
+    vol2 = volume(target_filtered)
+    print("Target Volume: \n", vol2)
 
-    batch_iou = np.zeros((n,m), dtype=np.float32)
-    for i in range(m):
-        rect2 = batch_corners2[i][[3, 1, 0, 2]][::-1, :2]
-        vol2 = vol_batch2[i]
-
-        y_max = np.where(y_max_batch1-y_max_batch2[i]<0, y_max_batch1, y_max_batch2[i]) #n
-        y_min = np.where(y_min_batch1-y_min_batch2[i]>0, y_min_batch1, y_min_batch2[i]) #n
-        inter_y = np.where(y_max-y_min < 0., 0., y_max-y_min) #n
-        inter_area = np.zeros((n), dtype=np.float32) #n
-        for j in range(n):
-            rect1 = batch_corners1[j][[3, 1, 0, 2]][::-1, :2]
-            inter_area[j] = convex_hull_intersection(rect1, rect2)[1]
-        inter_vol = inter_y * inter_area #n
-        batch_iou[:,i] = inter_vol/(vol_batch1+vol2-inter_vol)
-
-    return batch_iou
+    iou_3d = np.zeros((ground.shape[0], target.shape[0]), dtype=np.float32)
+    iou_3d[intersected_filter] = inter_vol / (np.tile(vol1, (inter_vol.shape[0], 1)) + np.tile(vol2, (inter_vol.shape[0], 1)) - inter_vol)
+    print("3D IoU: \n", iou_3d)
+    return iou_3d, iou_2d

@@ -1,5 +1,4 @@
 import json
-import cv2
 import numpy as np
 
 from pathlib import Path
@@ -22,57 +21,38 @@ def read_endpoints(structures: np.ndarray) -> Tuple[Dict, np.ndarray]:
     """
     index = []
     endpoints = []
+    print("\nDataset: ")
     for structure in structures:
         x1, y1, z1 = structure[:3]
         x2, y2, z2 = structure[3:6]
         
         width, depth, height = structure[6:9]
-        w2, d2, h2 = (width / 2) + 0.1, (depth / 2), (height / 2)
+        w2, d2, h2 = (width / 2), (depth / 2), (height / 2)
 
+        rotation = structure[10]
         d = np.array([(x2 - x1), (y2 - y1)], dtype=np.float32)
-        angle: float = np.arctan2(d[1], d[0]) # Source points rotation OX (radians)
-        angle = np.rad2deg(angle)
-
-        rotation: float = structure[10] # Structure specicic rotation (degrees)
-        angle += rotation # Final rotation angle in degrees
-        if rotation > 0:
-            sides = np.array([
-                [-w2, +d2],
-                [+w2, +d2],
-                [-w2, -d2],
-                [+w2, -d2]
-            ], dtype=np.float32)
-            sides = np.tile(sides, (2, 1))
-
-            rotation = np.deg2rad(rotation)
-            """ 2D [x,y] vector rotation matrix.
-                Docs: https://matthew-brett.github.io/teaching/rotation_2d.html."""
-            R = np.array([
-                [np.cos(rotation), -np.sin(rotation)],
-                [np.sin(rotation), np.cos(rotation)]
+        if np.sum(d) == 0 and rotation > 0:
+            rad = np.deg2rad(rotation)
+            mat = np.array([
+                [np.cos(rad), -np.sin(rad)],
+                [np.sin(rad), np.cos(rad)]
             ])
-            for i in range(sides.shape[0]):
-                sides[i] = np.dot(R, sides[i])
+            p = np.array([-d2, w2]).dot(mat)
+            n = np.array([-d2, -w2]).dot(mat)
+
+            x = np.asarray([x1+p[0], x1+n[0], x2+n[0], x2+p[0], x1-d2, x1-d2, x2+d2, x2+d2])
+            y = np.asarray([y1+p[0], y1+n[0], y2+n[0], y2+p[0], y1-w2, y1+w2, y2-w2, y2-w2])
         else:
             d /= np.linalg.norm(d + np.finfo(np.float32).eps)
             dx = -d[1] * w2
-            dy = d[0] * w2
+            dy = d[0] * d2
 
-            sides = np.array([
-                [-dx, +dy],
-                [+dx, -dy],
-                [-dx, +dy],
-                [+dx, -dy]
-            ], dtype=np.float32)
-            sides = np.tile(sides, (2, 1))
-
-        # Points:      [0 , 1 , 2 -- , 3 -- , 4 -- , 5 -- , 6 -- , 7 -- ]
-        x = np.asarray([x1, x1, x2, x2, x1   , x1   , x2   , x2   ])
-        y = np.asarray([y1, y1, y2, y2, y1   , y1   , y2   , y2   ])
-        z = np.asarray([z1, z1, z1, z1, z1+h2, z1+h2, z1+h2, z1+h2])
+        # Points:      [0 -- , 1 -- , 2 -- , 3 -- , 4 -- , 5 -- , 6 -- , 7 -- ]
+        x = np.asarray([x1+dx, x1-dx, x2-dx, x2+dx, x1+dx, x1-dx, x2-dx, x2+dx])
+        y = np.asarray([y1-dy, y1+dy, y2+dy, y2-dy, y1-dy, y1+dy, y2+dy, y2-dy])
+        z = np.asarray([z1   , z1   , z1   , z1   , z1+h2, z1+h2, z1+h2, z1+h2])
 
         corners = np.vstack([x, y, z]).transpose()
-        corners[:, :2] += sides
         endpoints.append(corners)
 
         classname = structure[9]
@@ -91,11 +71,13 @@ def read_structures(data: Dict) -> np.ndarray:
         `(x1, y1, z1, x2, y2, z2, width, depth, height, classname: str)`."""
     structureslist: List = []
     for classname, structures in data.items():
+        if classname != "doors":
+            continue
         for structure in structures:
             x1, y1, z1 = structure.get("start_pt", structure.get("loc", [.0, .0, .0]))
             x2, y2, z2 = structure.get("end_pt", structure.get("loc", [.0, .0, .0]))
             width = structure.get("width", .0)
-            depth = structure.get("depth", .0)
+            depth = structure.get("depth", width)
             height = structure.get("height", 0)
             rotation = structure.get("rotation", 0)
             structureslist.append([

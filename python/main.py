@@ -1,10 +1,10 @@
+import json
 import typer
 import dotenv
 import logging
 
 from pathlib import Path
 
-import config
 import loader
 import matching
 import utils
@@ -23,6 +23,7 @@ app = typer.Typer()
 def match(
     gtpath: Path = typer.Argument(..., help="Path to a ground-truth file", exists=True, file_okay=True, dir_okay=False),
     tgpath: Path = typer.Argument(..., help="Path to a target file", exists=True, file_okay=True, dir_okay=False),
+    output: Path = typer.Option("match.json", help="Path to the output file", file_okay=True, dir_okay=False)
 ):
     logging.info("Reading the models..")
 
@@ -32,8 +33,9 @@ def match(
     tgdata = loader.read_json(tgpath)
     tgstructures = loader.read_structures(tgdata)
 
-    matching.match(gtstructures, tgstructures)
-
+    match = matching.match(gtstructures, tgstructures)
+    with open(output, "w+", encoding="utf-8") as file:
+        json.dump(match, file, ensure_ascii=False, indent=4, cls=utils.NumpyArrayEncoder)
 
 if __name__ == "__main__":
     app()

@@ -11,7 +11,7 @@ import loader
 import utils
 
 from calculations.cost_matrix import calculate_cost_matrix
-from calculations.iou import iou_box
+from calculations.iou import iou_batch
 
 
 def align(gt_normalized: np.ndarray, tg_normalized: np.ndarray) -> Tuple[float, np.ndarray, np.ndarray]:
@@ -32,33 +32,25 @@ def align(gt_normalized: np.ndarray, tg_normalized: np.ndarray) -> Tuple[float, 
     print()
     return (scale, rotation, translation)
 
-def lap(
-    gt_normalized: np.ndarray,
-    tg_normalized: np.ndarray,
-) -> Tuple[np.ndarray, List[int], List[int]]:
+def calculate_metrics(
+    ground: np.ndarray,
+    target: np.ndarray
+) -> Dict:
+    logging.debug(f"Counting metrics...")
+
     """ Returns linear assignment problem solution using scipy Hungarian implementation.
         Cost function between verticies is defined in `calculate_cost_matrix` method.
         Default: Euclidean distance (L2)."""
     logging.debug(f"Calculating cost matrix optimized: {config.enable_optimization}...")
-    cost_matrix = calculate_cost_matrix(gt_normalized, tg_normalized)
-
-    logging.debug("Applying linear_sum_assignment...")
-    match_rows, match_colls = linear_sum_assignment(cost_matrix)
-    return cost_matrix, match_rows, match_colls
-
-def calculate_metrics(
-    cost_matrix: np.ndarray,
-    match_rows: List[int],
-    match_colls: List[int]
-) -> Tuple[np.ndarray, Dict]:
-    logging.debug(f"Counting metrics...")
-    matches: Dict[List] = defaultdict(list)
+    cost_matrix = calculate_cost_matrix(ground, target)
 
     # Cost matrix consists of ground (rows / height) and target (colls / width)
     height, width = cost_matrix.shape[:2]
 
-    for i in range(len(match_rows)):
-        row, col = match_rows[i], match_colls[i]
+    matches: Dict[List] = defaultdict(list)
+    logging.debug("Applying linear_sum_assignment...")
+    rows, cols = linear_sum_assignment(cost_matrix, maximize=False)
+    for row, col in list(zip(rows, cols)):
         distance: float = cost_matrix[row, col]
         for threshold in config.metrics_thresholds:
             if distance < threshold:
@@ -77,57 +69,69 @@ def calculate_metrics(
             "recall": recall,
             "f1": f1
         }
-    return metrics
+    return dict(metrics)
 
 
 def calculate_iou(
-    gtstructures: np.ndarray,
+    gtindex: Dict[str, np.ndarray],
     gtendpoints: np.ndarray,
-    tgstructures: np.ndarray,
+    tgindex: Dict[str, np.ndarray],
     tgendpoints: np.ndarray
-) -> List[float]:
-    logging.debug("Calculating 3D IoU metric...")
-    ious = []
-    for i, ground in enumerate(gtstructures):
-        gclass = ground[9]
-        gious = []
-        for k, target in enumerate(tgstructures):
-            tclass = target[9]
-            if gclass != tclass:
-                continue
-            iou = iou_box(gtendpoints[i], tgendpoints[k])[0]
-            gious.append(iou)
-            if iou > .99:
-                break
-        ious.append(max(gious))
-    return np.asarray(ious)
+) -> Dict[str, np.ndarray]:
+    ious: Dict[str, List] = defaultdict(list)
 
+    """ Calculate IoU based on GT classes only."""
+    for key in gtindex.keys():
+        gtsample = gtendpoints[gtindex[key]]
+        tgsample = tgendpoints[tgindex.get(key, [])]
 
+        logging.debug(f"Calculating 3D IoU for {gtsample.shape[0]} over {tgsample.shape[0]} structures...")
+        iou3d = iou_batch(gtsample, tgsample)[0]
+
+        logging.debug("Applying linear_sum_assignment...")
+        rows, cols = linear_sum_assignment(iou3d, maximize=True)
+        for row, col in list(zip(rows, cols)):
+            ious[key].append(iou3d[row, col])
+        ious[key] = np.asarray(ious[key], dtype=np.float32)
+        
+        general = {}
+        for classname, iou in ious.items():
+            general[classname] = {
+                "min": iou.min(),
+                "max": iou.max(),
+                "mean": iou.mean(),
+                "median": np.median(iou),
+                "std": iou.std()
+            }
+        ious["general"] = general
+    return ious
+
+@utils.profile(output_root="profiling", enabled=config.debug)
 def match(
     gtstructures: np.ndarray,
     tgstructures: np.ndarray
-) -> None:
-    """ Notations: `gtdoc` - ground-truth .dxf document. `tgdoc` - target (user's prediction) .dxf document."""
+) -> Dict:
     logging.info("Matching models...")
     np.set_printoptions(precision=4, suppress=True)
 
-    """logging.debug(f"Ground endpoints: mean {ground.mean():.2f}, max {ground.max(0)}, "
-                    f"min {ground.min(0)}, size: {(ground.max(0) - ground.min(0))} "
-                    f"(avg: {np.mean((ground.max(0) - ground.min(0))):.2f})")
-    target, tg_faces = endpoints.get_endpoints(tgdoc, layerslist=layerslist)
-    logging.debug(f"Target endpoints: len  mean {target.mean():.2f}, max {target.max(0)}, "
-                    f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
-                    f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")"""
-    gtendpoints = loader.read_endpoints(gtstructures)
-    tgendpoints = loader.read_endpoints(tgstructures)
+    gtindex, gtendpoints = loader.read_endpoints(gtstructures)
+    tgindex, tgendpoints = loader.read_endpoints(tgstructures)
 
     width, height = 780, 780
     origin: np.ndarray = np.full((width, height, 3), 255, dtype=np.uint8)
     origin = utils.plot_endpoints(gtendpoints, width, height, monocolor=(255, 0, 0), origin=origin)
     origin = utils.plot_endpoints(tgendpoints, width, height, monocolor=(0, 0, 255), origin=origin)
 
+    """ Reshape to flatten arrays for point-cloud alignment."""
     ground = gtendpoints.reshape(-1, 3)
+    logging.debug(f"Ground endpoints: mean {ground.mean():.2f}, max {ground.max(0)}, "
+                    f"min {ground.min(0)}, size: {(ground.max(0) - ground.min(0))} "
+                    f"(avg: {np.mean((ground.max(0) - ground.min(0))):.2f})")
+
     target = tgendpoints.reshape(-1, 3)
+    logging.debug(f"Target endpoints: len  mean {target.mean():.2f}, max {target.max(0)}, "
+                    f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
+                    f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")
 
     if config.enable_normalization:
         """ Use Coherent Point Drift Algorithm for preprocessing alignment.
@@ -144,16 +148,42 @@ def match(
             f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
             f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")
         origin = utils.plot_endpoints(target, width, height, monocolor=(0, 255, 0), origin=origin)
+    else:
+        scale, rotation, translation = None, None, None
 
-    """ Use Hungarian matching to find nearest points."""
-    cost_matrix, match_rows, match_colls = lap(ground, target)
+    """ Calculate base metrics: precision, recall."""
+    metrics = calculate_metrics(ground, target)
+    for threshold, values in metrics.items():
+        logging.info(f"Threshold: {threshold}")
+        logging.info(f"  Metrics: {values}")
 
-    metrics = calculate_metrics(cost_matrix, match_rows, match_colls)
-    print("Metrics: ", metrics)
+    """ Calculate 3D IoU grouped by classname: walls, collumns, doors."""
+    ious = calculate_iou(gtindex, gtendpoints, tgindex, tgendpoints)
+    for classname, iou in ious.items():
+        if classname == "general":
+            continue
+        logging.info(f"Classname: {classname}")
+        logging.info(f"  IoU: min {iou.min():.4f}, max {iou.max():.4f}, mean {iou.mean():.4f}, median {np.median(iou):.4f}, std {np.std(iou):.4f}")
 
-    ious = calculate_iou(gtstructures, gtendpoints, tgstructures, tgendpoints)
-    print(f"IoU: min {ious.min():.4f}, max {ious.max():.4f}, mean {ious.mean():.4f}, median {np.median(ious):.4f}, std {np.std(ious):.4f}")
+    results = {
+        "scale": scale,
+        "rotation": rotation,
+        "translation": translation,
+        "metrics": metrics,
+        "ious": ious,
+    }
+
+    if config.debug:
+        results["config"] = {
+            "enable_optimization": config.enable_optimization,
+            "enable_normalization": config.enable_normalization,
+            "metrics_thresholds": config.metrics_thresholds,
+            "iou_thresholds": config.iou_thresholds,
+            "units_multiplier": config.units_multiplier,
+            "debug": config.debug
+        }
 
     logging.debug("Showing preview data using OpenCV...")
     cv2.imshow("Preview (scaled)", origin)
     cv2.waitKey(0)
+    return results

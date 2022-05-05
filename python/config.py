@@ -15,3 +15,6 @@ metrics_thresholds: List[float] = [0.05, 0.10, 0.20]
 iou_thresholds: List[float] = [0.25, 0.50, 0.75]
 
 units_multiplier: float = 1
+
+""" Debug."""
+debug: bool = False
