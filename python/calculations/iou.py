@@ -67,6 +67,11 @@ def convex_hull_intersection(p1, p2):
                 result[i, j] = hull_inter.volume
     return result
 
+def is_clockwise(p):
+    x = p[:,0]
+    y = p[:,1]
+    return np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)) > 0
+
 def counter_clockwise(rectangle: np.ndarray) -> np.ndarray:
     x, y = rectangle[..., 0], rectangle[..., 1]
     filter = np.sum(x * np.roll(y, 1, axis=-1), axis=-1) - np.sum(y * np.roll(x, 1, axis=-1), axis=-1) > 0
@@ -75,13 +80,9 @@ def counter_clockwise(rectangle: np.ndarray) -> np.ndarray:
 
 def volume(corners) -> float:
     """ corners: (8,3) no assumption on axis direction """
-    print(f"Calculating volume [{corners.shape}]: \n...")
-    width = np.sqrt(np.sum(np.power(corners[..., 0, :2] - corners[..., 1, :2], 2), axis=1))
-    print(" Width: ", width)
-    length = np.sqrt(np.sum(np.power(corners[..., 1, :2] - corners[..., 2, :2], 2), axis=1))
-    print(" Length: ", length)
+    width = np.sqrt(np.sum(np.power(corners[..., 0, :2] - corners[..., 2, :2], 2), axis=1))
+    length = np.sqrt(np.sum(np.power(corners[..., 1, :2] - corners[..., 3, :2], 2), axis=1))
     height = np.abs(corners[..., 0, 2] - corners[..., 4, 2])
-    print(" Height: ", height)
     return (width * length * height)
 
 def iou_batch(
@@ -104,26 +105,27 @@ def iou_batch(
 
     print(f"Identical: {np.array_equal(ground, target)}")
 
-    gface = ground[:, :4][..., :2]
-    print(f"Ground Face [{gface.shape}, {gface.dtype}]: \n", gface[:1], "\n...")
-    tface = target[:, :4][..., :2]
-    print(f"Target Face [{tface.shape}, {tface.dtype}]: \n", tface[:1], "\n...")
+    indices = [0, 2, 3, 1]
+    gface = ground[:, indices][..., :2]
+    # print(f"Ground Face [{gface.shape}, {gface.dtype}]: \n", gface[:3], "\n...")
+    tface = target[:, indices][..., :2]
+    # print(f"Target Face [{tface.shape}, {tface.dtype}]: \n", tface[:3], "\n...")
     
     gface = counter_clockwise(gface)
-    print(f"Rect1 [{gface.shape}, {gface.dtype}].")
+    # print(f"Rect1 [{gface.shape}, {gface.dtype}].")
     tface = counter_clockwise(tface)
-    print(f"Rect2 [{tface.shape}, {tface.dtype}].")
+    # print(f"Rect2 [{tface.shape}, {tface.dtype}].")
     
     garea = poly_area(gface[..., 0], gface[..., 1])
-    print(f"Area1 [{garea.shape}, {garea.dtype}]: \n", garea)
+    # print(f"Area1 [{garea.shape}, {garea.dtype}]: \n", garea)
     tarea = poly_area(tface[..., 0], tface[..., 1])
-    print(f"Area2 [{tarea.shape}, {tarea.dtype}]: \n", tarea)
+    # print(f"Area2 [{tarea.shape}, {tarea.dtype}]: \n", tarea)
 
     inter_area = convex_hull_intersection(gface, tface)
-    print(f"Inter Area [{inter_area.shape}, {inter_area.dtype}]: \n", inter_area)
+    # print(f"Inter Area [{inter_area.shape}, {inter_area.dtype}]: \n", inter_area)
 
     intersected_filter = np.argwhere(np.any(inter_area, axis=1)).ravel()
-    print("Intersected Filter: \n", intersected_filter)
+    # print("Intersected Filter: \n", intersected_filter)
 
     inter_area = inter_area[intersected_filter]
     garea = garea[intersected_filter]
@@ -138,15 +140,15 @@ def iou_batch(
     zmax = np.min([ground_filtered[..., 4, 2], target_filtered[..., 4, 2]], axis=0)
     zmin = np.max([ground_filtered[..., 0, 2], target_filtered[..., 0, 2]], axis=0)
     difference = np.max([np.full_like(zmax, .0), zmax - zmin], axis=0)
-    print(f"Difference [{difference.shape}, {difference.dtype}]: \n", difference)
+    # print(f"Difference [{difference.shape}, {difference.dtype}]: \n", difference[:10])
 
     inter_vol = inter_area * difference
-    print("Inter Volume: \n", inter_vol)
+    # print("Inter Volume: \n", inter_vol)
 
     vol1 = volume(ground_filtered)
-    print("Ground Volume: \n", vol1)
+    # print("Ground Volume: \n", vol1[:10])
     vol2 = volume(target_filtered)
-    print("Target Volume: \n", vol2)
+    # print("Target Volume: \n", vol2[:10])
 
     iou_3d = np.zeros((ground.shape[0], target.shape[0]), dtype=np.float32)
     iou_3d[intersected_filter] = inter_vol / (np.tile(vol1, (inter_vol.shape[0], 1)) + np.tile(vol2, (inter_vol.shape[0], 1)) - inter_vol)

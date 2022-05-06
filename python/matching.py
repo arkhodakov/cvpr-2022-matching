@@ -85,7 +85,7 @@ def calculate_iou(
         gtsample = gtendpoints[gtindex[key]]
         tgsample = tgendpoints[tgindex.get(key, [])]
 
-        logging.debug(f"Calculating 3D IoU for {gtsample.shape[0]} over {tgsample.shape[0]} structures...")
+        logging.debug(f"Calculating 3D IoU for '{key}': {gtsample.shape[0]} over {tgsample.shape[0]} structures...")
         iou3d = iou_batch(gtsample, tgsample)[0]
 
         logging.debug("Applying linear_sum_assignment...")
@@ -94,16 +94,17 @@ def calculate_iou(
             ious[key].append(iou3d[row, col])
         ious[key] = np.asarray(ious[key], dtype=np.float32)
         
-        general = {}
-        for classname, iou in ious.items():
-            general[classname] = {
-                "min": iou.min(),
-                "max": iou.max(),
-                "mean": iou.mean(),
-                "median": np.median(iou),
-                "std": iou.std()
-            }
-        ious["general"] = general
+    general = {}
+    for classname, iou in ious.items():
+        print("IoU: ", iou)
+        general[classname] = {
+            "min": iou.min(),
+            "max": iou.max(),
+            "mean": iou.mean(),
+            "median": np.median(iou),
+            "std": iou.std()
+        }
+    ious["general"] = general
     return ious
 
 @utils.profile(output_root="profiling", enabled=config.debug)
@@ -117,10 +118,10 @@ def match(
     gtindex, gtendpoints = loader.read_endpoints(gtstructures)
     tgindex, tgendpoints = loader.read_endpoints(tgstructures)
 
-    width, height = 780, 780
+    width, height = 1024, 1024
     origin: np.ndarray = np.full((width, height, 3), 255, dtype=np.uint8)
-    origin = utils.plot_endpoints(gtendpoints, width, height, monocolor=(255, 0, 0), origin=origin)
-    origin = utils.plot_endpoints(tgendpoints, width, height, monocolor=(0, 0, 255), origin=origin)
+    origin = utils.plot(gtendpoints, gtstructures, width, height, monocolor=(255, 0, 0), origin=origin)
+    origin = utils.plot(tgendpoints, tgstructures, width, height, monocolor=(0, 0, 255), origin=origin)
 
     """ Reshape to flatten arrays for point-cloud alignment."""
     ground = gtendpoints.reshape(-1, 3)
@@ -152,10 +153,10 @@ def match(
         scale, rotation, translation = None, None, None
 
     """ Calculate base metrics: precision, recall."""
-    metrics = calculate_metrics(ground, target)
+    """metrics = calculate_metrics(ground, target)
     for threshold, values in metrics.items():
         logging.info(f"Threshold: {threshold}")
-        logging.info(f"  Metrics: {values}")
+        logging.info(f"  Metrics: {values}")"""
 
     """ Calculate 3D IoU grouped by classname: walls, collumns, doors."""
     ious = calculate_iou(gtindex, gtendpoints, tgindex, tgendpoints)
@@ -169,7 +170,7 @@ def match(
         "scale": scale,
         "rotation": rotation,
         "translation": translation,
-        "metrics": metrics,
+        # "metrics": metrics,
         "ious": ious,
     }
 

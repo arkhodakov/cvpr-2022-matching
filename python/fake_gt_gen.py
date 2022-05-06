@@ -18,15 +18,16 @@ from os.path import join as path_join
 
 
 # names and directories
-floor_names = ['05_MedOffice_01_F2',
+floor_names = ['01_OfficeLab01_Allfloors',
+               '05_MedOffice_01_F2',
                '07_MedOffice_03_F3',
                '07_MedOffice_03_F5',
                '08_ShortOffice_01_F1',
                '11_MedOffice_05_F4',
                '19_MedOffice_07_F4']
 
-gt_root = './gt'
-fake_gt_root = './fake_gt'
+gt_root = '../data/'
+fake_gt_root = '../augmented/'
 
 
 # random parameters
