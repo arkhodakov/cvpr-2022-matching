@@ -33,9 +33,9 @@ def read_endpoints(structures: np.ndarray) -> Tuple[Dict, np.ndarray]:
         if d.sum() == 0:
             sides = np.array([
                 [-w2, +d2],
-                [+w2, +d2],
                 [-w2, -d2],
-                [+w2, -d2]
+                [+w2, -d2],
+                [+w2, +d2]
             ], dtype=np.float32)
             sides = np.tile(sides, (2, 1))
 
@@ -57,15 +57,15 @@ def read_endpoints(structures: np.ndarray) -> Tuple[Dict, np.ndarray]:
 
             sides = np.array([
                 [-dx, +dy],
-                [+dx, -dy],
                 [-dx, +dy],
+                [+dx, -dy],
                 [+dx, -dy]
             ], dtype=np.float32)
             sides = np.tile(sides, (2, 1))
 
-        # Points:      [0 , 1 , 2 -- , 3 -- , 4 -- , 5 -- , 6 -- , 7 -- ]
-        x = np.asarray([x1, x1, x2, x2, x1   , x1   , x2   , x2   ])
-        y = np.asarray([y1, y1, y2, y2, y1   , y1   , y2   , y2   ])
+        # Points:      [0 , 1 , 2 , 3 , 4 -- , 5 -- , 6 -- , 7 -- ]
+        x = np.asarray([x1, x2, x2, x1, x1   , x2   , x2   , x1   ])
+        y = np.asarray([y1, y2, y2, y1, y1   , y2   , y2   , y1   ])
         z = np.asarray([z1, z1, z1, z1, z1+h2, z1+h2, z1+h2, z1+h2])
 
         corners = np.vstack([x, y, z]).transpose()

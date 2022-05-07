@@ -1,5 +1,6 @@
+import logging
 import numpy as np
-import matplotlib.pyplot as plt
+
 from scipy.spatial import ConvexHull
 from typing import Tuple
 
@@ -79,9 +80,8 @@ def counter_clockwise(rectangle: np.ndarray) -> np.ndarray:
     return rectangle
 
 def volume(corners) -> float:
-    """ corners: (8,3) no assumption on axis direction """
-    width = np.sqrt(np.sum(np.power(corners[..., 0, :2] - corners[..., 2, :2], 2), axis=1))
-    length = np.sqrt(np.sum(np.power(corners[..., 1, :2] - corners[..., 3, :2], 2), axis=1))
+    width = np.sqrt(np.sum(np.power(corners[..., 0, :2] - corners[..., 1, :2], 2), axis=1))
+    length = np.sqrt(np.sum(np.power(corners[..., 0, :2] - corners[..., 3, :2], 2), axis=1))
     height = np.abs(corners[..., 0, 2] - corners[..., 4, 2])
     return (width * length * height)
 
@@ -98,59 +98,58 @@ def iou_batch(
         iou: 3D bounding box IoU
         iou_2d: bird's eye view 2D bounding box IoU
     """
-    minimal = np.min([np.min([ground, target]), .0])
+    minimal = np.min([ground.min(), target.min(), .0])
     ground -= minimal
     target -= minimal
-    print("Minimal: ", minimal)
+    logging.debug(f"Minimal: {minimal}")
 
-    print(f"Identical: {np.array_equal(ground, target)}")
+    logging.debug(f"Identical: {np.array_equal(ground, target)}")
 
-    indices = [0, 2, 3, 1]
-    gface = ground[:, indices][..., :2]
-    # print(f"Ground Face [{gface.shape}, {gface.dtype}]: \n", gface[:3], "\n...")
-    tface = target[:, indices][..., :2]
-    # print(f"Target Face [{tface.shape}, {tface.dtype}]: \n", tface[:3], "\n...")
+    n: int = np.min([20, ground.shape[0], target.shape[0]])
+    gface = ground[:, :4][..., :2]
+    logging.debug(f"Ground Face [{gface.shape}, {gface.dtype}]")
+    tface = target[:, :4][..., :2]
+    logging.debug(f"Target Face [{tface.shape}, {tface.dtype}]")
+    gtdiff = gface[:n] - tface[:n]
+    logging.debug(f"Ground-Target difference [mean: {gtdiff.mean(0)}]: \n{gtdiff}\n...")
     
     gface = counter_clockwise(gface)
-    # print(f"Rect1 [{gface.shape}, {gface.dtype}].")
     tface = counter_clockwise(tface)
-    # print(f"Rect2 [{tface.shape}, {tface.dtype}].")
     
     garea = poly_area(gface[..., 0], gface[..., 1])
-    # print(f"Area1 [{garea.shape}, {garea.dtype}]: \n", garea)
+    logging.debug(f"Area1 [{garea.shape}, {garea.dtype}]: \n{garea[:n]}\n...")
     tarea = poly_area(tface[..., 0], tface[..., 1])
-    # print(f"Area2 [{tarea.shape}, {tarea.dtype}]: \n", tarea)
+    logging.debug(f"Area2 [{tarea.shape}, {tarea.dtype}]: \n{tarea[:n]}\n...")
 
     inter_area = convex_hull_intersection(gface, tface)
-    # print(f"Inter Area [{inter_area.shape}, {inter_area.dtype}]: \n", inter_area)
 
-    intersected_filter = np.argwhere(np.any(inter_area, axis=1)).ravel()
-    # print("Intersected Filter: \n", intersected_filter)
+    intersection = np.argwhere(inter_area > 0)
+    rows, cols = intersection[:, 0], intersection[:, 1]
+    logging.debug(f"Intersection [{intersection.shape}]: \n{intersection[:n]}\n...")
 
-    inter_area = inter_area[intersected_filter]
-    garea = garea[intersected_filter]
-    tarea = tarea[intersected_filter]
+    inter_area = inter_area[rows, cols]
+    logging.debug(f"Inter Area [{inter_area.shape}, {inter_area.dtype}]: \n{inter_area[:n]}\n...")
+    
+    iou_2d = inter_area / (garea[rows] + tarea[cols] - inter_area)
+    logging.debug(f"2D IoU  [{iou_2d.shape}]: \n{iou_2d[:n]}\n...")
 
-    iou_2d = inter_area / (np.tile(garea, (inter_area.shape[0], 1)) + np.tile(tarea, (inter_area.shape[0], 1)) - inter_area)
-    print("2D IoU: \n", iou_2d)
-
-    ground_filtered = ground[intersected_filter]
-    target_filtered = target[intersected_filter]
+    ground_filtered = ground[rows]
+    target_filtered = target[cols]
 
     zmax = np.min([ground_filtered[..., 4, 2], target_filtered[..., 4, 2]], axis=0)
     zmin = np.max([ground_filtered[..., 0, 2], target_filtered[..., 0, 2]], axis=0)
     difference = np.max([np.full_like(zmax, .0), zmax - zmin], axis=0)
-    # print(f"Difference [{difference.shape}, {difference.dtype}]: \n", difference[:10])
+    logging.debug(f"Difference [{difference.shape}, {difference.dtype}]: \n{difference[:n]}\n...")
 
     inter_vol = inter_area * difference
-    # print("Inter Volume: \n", inter_vol)
+    logging.debug(f"Inter Volume [{inter_vol.shape}]: \n{inter_vol[:n]}\n...")
 
     vol1 = volume(ground_filtered)
-    # print("Ground Volume: \n", vol1[:10])
+    logging.debug(f"Ground Volume [{vol1.shape}]: \n{vol1[:n]}\n...")
     vol2 = volume(target_filtered)
-    # print("Target Volume: \n", vol2[:10])
+    logging.debug(f"Target Volume [{vol2.shape}]: \n{vol2[:n]}\n...")
 
     iou_3d = np.zeros((ground.shape[0], target.shape[0]), dtype=np.float32)
-    iou_3d[intersected_filter] = inter_vol / (np.tile(vol1, (inter_vol.shape[0], 1)) + np.tile(vol2, (inter_vol.shape[0], 1)) - inter_vol)
-    print("3D IoU: \n", iou_3d)
+    iou_3d[rows, cols] = inter_vol / (vol1 + vol2 - inter_vol)
+    logging.debug(f"3D IoU: \n{iou_3d}")
     return iou_3d, iou_2d

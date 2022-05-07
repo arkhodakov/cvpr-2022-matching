@@ -32,14 +32,14 @@ fake_gt_root = '../augmented/'
 
 # random parameters
 translate_prob = 0.1  # probability of applying translation
-translate_x_max = 0.5  # translate each corner of wall, unit in meters
-translate_y_max = 0.5
-translate_z_max = 0.5
+translate_x_max = 2.5  # translate each corner of wall, unit in meters
+translate_y_max = 2.5
+translate_z_max = 2.5
 
-scale_prob = 0.1  # probability of applying scaling
-scale_w_max = 0.5  # max scale width in terms of percentage of original
-scale_h_max = 0.5  # height
-scale_d_max = 0.5  # depth
+scale_prob = 0.5  # probability of applying scaling
+scale_w_max = 1.2  # max scale width in terms of percentage of original
+scale_h_max = 1.2  # height
+scale_d_max = 1.2  # depth
 
 rotate_prob = 0.1  # only for doors and columns
 rotate_max = 5  # max rotation in degrees

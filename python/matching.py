@@ -33,44 +33,50 @@ def align(gt_normalized: np.ndarray, tg_normalized: np.ndarray) -> Tuple[float, 
     return (scale, rotation, translation)
 
 def calculate_metrics(
-    ground: np.ndarray,
-    target: np.ndarray
+    gtindex: Dict[str, np.ndarray],
+    gtendpoints: np.ndarray,
+    tgindex: Dict[str, np.ndarray],
+    tgendpoints: np.ndarray
 ) -> Dict:
-    logging.debug(f"Counting metrics...")
-
-    """ Returns linear assignment problem solution using scipy Hungarian implementation.
-        Cost function between verticies is defined in `calculate_cost_matrix` method.
-        Default: Euclidean distance (L2)."""
-    logging.debug(f"Calculating cost matrix optimized: {config.enable_optimization}...")
-    cost_matrix = calculate_cost_matrix(ground, target)
-
-    # Cost matrix consists of ground (rows / height) and target (colls / width)
-    height, width = cost_matrix.shape[:2]
-
-    matches: Dict[List] = defaultdict(list)
-    logging.debug("Applying linear_sum_assignment...")
-    rows, cols = linear_sum_assignment(cost_matrix, maximize=False)
-    for row, col in list(zip(rows, cols)):
-        distance: float = cost_matrix[row, col]
-        for threshold in config.metrics_thresholds:
-            if distance < threshold:
-                matches[threshold].append(distance)
     metrics: Dict = defaultdict(dict)
 
-    for threshold, matched in matches.items():
-        # Calculate metrics according to `compute_precision_recall_helper`:
-        # https://github.com/seravee08/WarpingError_Floorplan/blob/main/IOU_precision_recall/ipynb/main.ipynb
-        precision: float = len(matched) / width
-        recall: float = len(matched) / height
-        f1: float = (2 * precision * recall) / (precision + recall)
-        metrics[threshold] = {
-            "matched": len(matched),
-            "precision": precision,
-            "recall": recall,
-            "f1": f1
-        }
-    return dict(metrics)
+    for key in gtindex.keys():
+        gtsample = gtendpoints[gtindex[key]]
+        tgsample = tgendpoints[tgindex.get(key, [])]
 
+        metrics[key] = defaultdict(dict)
+        metrics[key]["total"] = gtsample.shape[0]
+        metrics[key]["predicted"] = tgsample.shape[0]
+
+        """ Returns linear assignment problem solution using scipy Hungarian implementation.
+            Cost function between verticies is defined in `calculate_cost_matrix` method.
+            Default: Euclidean distance (L2)."""
+        logging.debug(f"Calculating metrics for '{key}': {gtsample.shape[0]} over {tgsample.shape[0]} structures... Optimization: {config.enable_optimization}")
+        cost_matrix = calculate_cost_matrix(gtsample, tgsample)
+
+        matches: Dict[List] = defaultdict(list)
+        logging.debug("Applying linear_sum_assignment...")
+        rows, cols = linear_sum_assignment(cost_matrix, maximize=False)
+        for row, col in list(zip(rows, cols)):
+            distance: float = cost_matrix[row, col]
+            for threshold in config.metrics_thresholds:
+                if distance < threshold:
+                    matches[threshold].append(distance)
+        
+        for threshold, matched in matches.items():
+            # Calculate metrics according to `compute_precision_recall_helper`:
+            # https://github.com/seravee08/WarpingError_Floorplan/blob/main/IOU_precision_recall/ipynb/main.ipynb
+            precision: float = len(matched) / tgsample.shape[0]
+            recall: float = len(matched) / gtsample.shape[0]
+            f1: float = (2 * precision * recall) / (precision + recall)
+            metrics[key][threshold] = {
+                "matched": len(matched),
+                "precision": precision,
+                "recall": recall,
+                "f1": f1
+            }
+        metrics[key] = dict(metrics[key])
+    return dict(metrics)
 
 def calculate_iou(
     gtindex: Dict[str, np.ndarray],
@@ -92,11 +98,16 @@ def calculate_iou(
         rows, cols = linear_sum_assignment(iou3d, maximize=True)
         for row, col in list(zip(rows, cols)):
             ious[key].append(iou3d[row, col])
+        
+        lacklen: int = len(gtsample) - len(tgsample)
+        if lacklen > 0:
+            ious[key].extend([.0] * lacklen)
+        else:
+            logging.warn(f"In classname '{key}' sample lack length is: {lacklen}")
         ious[key] = np.asarray(ious[key], dtype=np.float32)
         
     general = {}
     for classname, iou in ious.items():
-        print("IoU: ", iou)
         general[classname] = {
             "min": iou.min(),
             "max": iou.max(),
@@ -118,19 +129,14 @@ def match(
     gtindex, gtendpoints = loader.read_endpoints(gtstructures)
     tgindex, tgendpoints = loader.read_endpoints(tgstructures)
 
-    width, height = 1024, 1024
-    origin: np.ndarray = np.full((width, height, 3), 255, dtype=np.uint8)
-    origin = utils.plot(gtendpoints, gtstructures, width, height, monocolor=(255, 0, 0), origin=origin)
-    origin = utils.plot(tgendpoints, tgstructures, width, height, monocolor=(0, 0, 255), origin=origin)
-
     """ Reshape to flatten arrays for point-cloud alignment."""
     ground = gtendpoints.reshape(-1, 3)
-    logging.debug(f"Ground endpoints: mean {ground.mean():.2f}, max {ground.max(0)}, "
+    logging.info(f"Ground endpoints: mean {ground.mean():.2f}, max {ground.max(0)}, "
                     f"min {ground.min(0)}, size: {(ground.max(0) - ground.min(0))} "
                     f"(avg: {np.mean((ground.max(0) - ground.min(0))):.2f})")
 
     target = tgendpoints.reshape(-1, 3)
-    logging.debug(f"Target endpoints: len  mean {target.mean():.2f}, max {target.max(0)}, "
+    logging.info(f"Target endpoints: len  mean {target.mean():.2f}, max {target.max(0)}, "
                     f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
                     f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")
 
@@ -148,18 +154,20 @@ def match(
         logging.debug(f"Aligned target endpoints: mean {target.mean():.2f}, max {target.max(0)}, "
             f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
             f"(avg: {np.mean((target.max(0) - target.min(0))):.2f})")
-        origin = utils.plot_endpoints(target, width, height, monocolor=(0, 255, 0), origin=origin)
     else:
         scale, rotation, translation = None, None, None
 
+    width, height = 1024, 1024
+    origin = utils.plot([ground, target], [gtstructures, tgstructures], width, height)
+
     """ Calculate base metrics: precision, recall."""
-    """metrics = calculate_metrics(ground, target)
-    for threshold, values in metrics.items():
-        logging.info(f"Threshold: {threshold}")
-        logging.info(f"  Metrics: {values}")"""
+    metrics = calculate_metrics(gtindex, ground, tgindex, target)
+    for classname, values in metrics.items():
+        logging.info(f"Classname: {classname}")
+        logging.info(f"  Metrics: {values}")
 
     """ Calculate 3D IoU grouped by classname: walls, collumns, doors."""
-    ious = calculate_iou(gtindex, gtendpoints, tgindex, tgendpoints)
+    ious = calculate_iou(gtindex, ground.reshape(-1, 8, 3), tgindex, target.reshape(-1, 8, 3))
     for classname, iou in ious.items():
         if classname == "general":
             continue
@@ -170,7 +178,7 @@ def match(
         "scale": scale,
         "rotation": rotation,
         "translation": translation,
-        # "metrics": metrics,
+        "metrics": metrics,
         "ious": ious,
     }
 
