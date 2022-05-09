@@ -44,6 +44,11 @@ def calculate_metrics(
         gtsample = gtendpoints[gtindex[key]]
         tgsample = tgendpoints[tgindex.get(key, [])]
 
+        gtsample = gtsample.reshape(-1, 3)
+        if len(tgsample) == 0:
+            raise RuntimeError(f"Cannot find '{key}' class in the target data.")
+        tgsample = tgsample.reshape(-1, 3)
+
         metrics[key] = defaultdict(dict)
         metrics[key]["total"] = gtsample.shape[0]
         metrics[key]["predicted"] = tgsample.shape[0]
@@ -63,13 +68,14 @@ def calculate_metrics(
                 if distance < threshold:
                     matches[threshold].append(distance)
         
+        metrics[key]["thresholds"] = {}
         for threshold, matched in matches.items():
             # Calculate metrics according to `compute_precision_recall_helper`:
             # https://github.com/seravee08/WarpingError_Floorplan/blob/main/IOU_precision_recall/ipynb/main.ipynb
             precision: float = len(matched) / tgsample.shape[0]
             recall: float = len(matched) / gtsample.shape[0]
             f1: float = (2 * precision * recall) / (precision + recall)
-            metrics[key][threshold] = {
+            metrics[key]["thresholds"][threshold] = {
                 "matched": len(matched),
                 "precision": precision,
                 "recall": recall,
@@ -157,6 +163,9 @@ def match(
     else:
         scale, rotation, translation = None, None, None
 
+    ground = ground.reshape(-1, 8, 3)
+    target = target.reshape(-1, 8, 3)
+
     width, height = 1024, 1024
     origin = utils.plot([ground, target], [gtstructures, tgstructures], width, height)
 
@@ -167,7 +176,7 @@ def match(
         logging.info(f"  Metrics: {values}")
 
     """ Calculate 3D IoU grouped by classname: walls, collumns, doors."""
-    ious = calculate_iou(gtindex, ground.reshape(-1, 8, 3), tgindex, target.reshape(-1, 8, 3))
+    ious = calculate_iou(gtindex, ground, tgindex, target)
     for classname, iou in ious.items():
         if classname == "general":
             continue
