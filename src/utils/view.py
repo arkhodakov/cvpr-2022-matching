@@ -53,7 +53,8 @@ def normalize(
     for i in range(len(endpoints)):
         endpoints[i] = endpoints[i].reshape(-1, 8, 3)
 
-    """centers = structures[:, :6].reshape(-1, 3)
+    """ TODO: Normalize structures.
+    centers = structures[:, :6].reshape(-1, 3)
     centers = (centers - centers.min()) / (centers.max() - centers.min())
     centers = centers - centers.mean(0)
     centers = centers / centers.max()
@@ -64,7 +65,8 @@ def plot(
     endpoints: Union[np.ndarray, List[np.ndarray]],
     structures: Union[np.ndarray, List[np.ndarray]],
     width: int = 780, height: int = 780, depth: int = 780,
-    origin: np.ndarray = None
+    origin: np.ndarray = None,
+    model: str = None, floor: str = None
 ) -> np.ndarray:
     """ Plot stuctures from the endpoints."""
     endpoints, structures = normalize(endpoints, structures)
@@ -88,8 +90,11 @@ def plot(
             cv2.line(origin, tl, bl, colors[i], 1)
             cv2.line(origin, br, tr, colors[i], 1)
 
-            # Plot middle line.
-            # (x1, y1, _) = (structures[index, :3] * scale + margin).astype(int)
-            # (x2, y2, _) = (structures[index, 3:6] * scale + margin).astype(int)
-            # drawline(origin, (x1, y1), (x2, y2), (0, 0, 0), 1, gap=5)
+            """ TODO: Plot structures middle line.
+            (x1, y1, _) = (structures[index, :3] * scale + margin).astype(int)
+            (x2, y2, _) = (structures[index, 3:6] * scale + margin).astype(int)
+            drawline(origin, (x1, y1), (x2, y2), (0, 0, 0), 1, gap=5)"""
+    if model or floor:
+        text: str = f"Model: {model or 'Unknown'} - {floor or 'Unknown'}"
+        cv2.putText(origin, text, (15, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 0), 1)
     return origin

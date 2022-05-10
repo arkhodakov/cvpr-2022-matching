@@ -1,6 +1,9 @@
+import re
 import json
+import zipfile
 import numpy as np
 
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
 
@@ -102,25 +105,56 @@ def read_structures(data: Dict) -> np.ndarray:
             ])
     return np.array(structureslist, dtype=object)
 
+def read_directory(source: Union[Path, str], pattern: str) -> Dict:
+    source = Path(source)
+    assert source.is_dir(), "Directories path only."
 
-def read_json(source: Union[Path, List[Path]]) -> Dict:
-    """Read data from separate JSON data files."""
-
-    """ Identificator - unique structure name. For example:
-        01_OfficeLab01_Allfloors - identificator,
-        _columns - classname."""
-    if isinstance(source, (str, Path)):
-        source = Path(source)
-        assert source.suffix == ".json", "JSON files only parsing is available."
-        identificator = "_".join(source.name.split("_")[:-1])
-
-        data: Dict = {}
-        files = list(source.parent.glob(f"{identificator}*.json"))
-    elif isinstance(source, List):
-        files = [Path(path) for path in source]
-
-    for file in files:
-        classname = file.name.split("_")[-1].split(".")[0]
+    data = defaultdict(lambda: defaultdict(dict))
+    for file in list(source.glob("*.json")):
+        groups = re.match(pattern, file.name).groupdict()
+        model, floor, classname = groups.get("model"), groups.get("floor"), groups.get("classname")
+        if any([group is None for group in [model, floor, classname]]):
+            raise RuntimeError(f"For file '{file}' one of the groups is None: {groups}")
         with open(file, "r", encoding="utf-8") as buffer:
-            data[classname] = json.load(buffer)
+            data[model][floor][classname] = json.load(buffer)
     return data
+
+def read_file(source: Union[Path, str], pattern: str) -> Dict:
+    source = Path(source)
+    assert source.is_file(), "Files path only."
+
+    if ".zip" in source.name:
+        target_dir: Path = source.parent.joinpath(source.name.split(".")[0])
+        with zipfile.ZipFile(str(source), mode="r") as archive:
+            for file in archive.namelist():
+                archive.extract(file, str(target_dir))
+        return read_directory(target_dir, pattern)
+    else:
+        groups = re.match(pattern, source.name).groupdict()
+        model = groups.get("model")
+        if model is None:
+            raise RuntimeError(f"Cannot find model group in '{file}'")
+        data = defaultdict(lambda: defaultdict(dict))
+        for file in list(source.parent.glob(f"{model}*.json")):
+            groups = re.match(pattern, file.name).groupdict()
+            model, floor, classname = groups.get("model"), groups.get("floor"), groups.get("classname")
+            if any([group is None for group in [model, floor, classname]]):
+                raise RuntimeError(f"For file '{file}' one of the groups is None: {groups}")
+            with open(file, "r", encoding="utf-8") as buffer:
+                data[model][floor][classname] = json.load(buffer)
+        return data
+
+def read_source(
+    source: Path,
+    pattern: str = r"(?P<model>.*)_(?P<floor>.*)_(?P<classname>columns|doors|walls).json"
+) -> Dict:
+    source = Path(source)
+
+    if source.is_dir():
+        return read_directory(source, pattern)
+    elif source.is_file():
+        if source.suffix != ".json":
+            raise RuntimeError(f"Only JSON data is acceptable.")
+        return read_file(source, pattern)
+    else:
+        raise RuntimeError(f"Unknown pathtype: {source}")

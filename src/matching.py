@@ -2,7 +2,9 @@ import cv2
 import numpy as np
 import logging
 
+from pathlib import Path
 from collections import defaultdict
+from functools import partial
 from scipy.optimize import linear_sum_assignment
 from typing import Dict, List, Tuple
 
@@ -12,14 +14,13 @@ import utils
 
 from calculations.cost_matrix import calculate_cost_matrix
 from calculations.iou import iou_batch
+from calculations.rigid_registration import RigidRegistration
 
 
+@utils.profile(output_root="profiling", enabled=config.debug)
 def align(gt_normalized: np.ndarray, tg_normalized: np.ndarray) -> Tuple[float, np.ndarray, np.ndarray]:
     """ Returns alignment `scale` factor, `rotation` matrix and `translation` matrix to transform
         target matrix `tg_normalized` to `gt_normalized`."""
-    from functools import partial
-    from pycpd import RigidRegistration
-
     logging.debug("Using RigidRegistration implementation to calculate the matrix...")
     def print_iter(iteration, error, X, Y):
         print(f"[RigidRegistration] Matching iter: {iteration}, error: {error:.2f}", end="\r")
@@ -127,9 +128,9 @@ def calculate_iou(
 @utils.profile(output_root="profiling", enabled=config.debug)
 def match(
     gtstructures: np.ndarray,
-    tgstructures: np.ndarray
+    tgstructures: np.ndarray,
+    output: Path, model: str, floor: str
 ) -> Dict:
-    logging.info("Matching models...")
     np.set_printoptions(precision=4, suppress=True)
 
     gtindex, gtendpoints = loader.read_endpoints(gtstructures)
@@ -150,12 +151,15 @@ def match(
         """ Use Coherent Point Drift Algorithm for preprocessing alignment.
             Source: https://github.com/siavashk/pycpd."""
         scale, rotation, translation = align(ground, target)
-        logging.info(f"Alignment scale ratio: {scale:.8f}")
+        logging.debug(f"Alignment scale ratio: {scale:.4f}")
+        logging.debug(f" - rotation: \n{rotation}")
+        logging.debug(f" - translation: \n{translation}")
 
         """Matricies alignment formula:"""
         translation = -np.dot(np.mean(target, 0), rotation) + translation + np.mean(ground, 0)
         target = np.dot(target, rotation) + translation
         target *= scale
+        target = target.astype(np.float32)
 
         logging.debug(f"Aligned target endpoints: mean {target.mean():.2f}, max {target.max(0)}, "
             f"min {target.min(0)}, size: {(target.max(0) - target.min(0))} "
@@ -167,7 +171,7 @@ def match(
     target = target.reshape(-1, 8, 3)
 
     width, height = 1024, 1024
-    origin = utils.plot([ground, target], [gtstructures, tgstructures], width, height)
+    origin = utils.plot([ground, target], [gtstructures, tgstructures], width, height, model=model, floor=floor)
 
     """ Calculate base metrics: precision, recall."""
     metrics = calculate_metrics(gtindex, ground, tgindex, target)
@@ -197,10 +201,9 @@ def match(
             "enable_normalization": config.enable_normalization,
             "metrics_thresholds": config.metrics_thresholds,
             "iou_thresholds": config.iou_thresholds,
-            "units_multiplier": config.units_multiplier,
             "debug": config.debug
         }
 
     logging.debug("Showing preview data using OpenCV...")
-    cv2.imwrite("match.jpg", origin)
+    cv2.imwrite(str(output.joinpath(f"{model}-{floor}.jpg")), origin)
     return results
