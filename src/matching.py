@@ -76,7 +76,7 @@ def calculate_metrics(
         for threshold, matched in matches.items():
             # Calculate metrics according to `compute_precision_recall_helper`:
             # https://github.com/seravee08/WarpingError_Floorplan/blob/main/IOU_precision_recall/ipynb/main.ipynb
-            if tgsample.size != 0:
+            if tgsample.shape[0] != 0:
                 precision: float = len(matched) / tgsample.shape[0]
                 recall: float = len(matched) / gtsample.shape[0]
                 f1: float = (2 * precision * recall) / (precision + recall)
