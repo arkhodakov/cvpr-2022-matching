@@ -1,3 +1,6 @@
+import config
+import utils
+
 import logging
 import numpy as np
 
@@ -85,6 +88,7 @@ def volume(corners) -> float:
     height = np.abs(corners[..., 0, 2] - corners[..., 4, 2])
     return (width * length * height)
 
+@utils.profile(output_root="profiling", enabled=config.debug)
 def iou_batch(
     ground: np.ndarray,
     target: np.ndarray
@@ -105,16 +109,18 @@ def iou_batch(
 
     logging.debug(f"Identical: {np.array_equal(ground, target)}")
 
-    n: int = np.min([20, ground.shape[0], target.shape[0]])
+    n: int = np.min([5, ground.shape[0], target.shape[0]])
     gface = ground[:, :4][..., :2]
-    logging.debug(f"Ground Face [{gface.shape}, {gface.dtype}]")
+    logging.debug(f"Ground Face [{gface.shape}, {gface.dtype}]: \n{gface[:n]}")
     tface = target[:, :4][..., :2]
-    logging.debug(f"Target Face [{tface.shape}, {tface.dtype}]")
+    logging.debug(f"Target Face [{tface.shape}, {tface.dtype}]: \n{tface[:n]}")
     gtdiff = gface[:n] - tface[:n]
     logging.debug(f"Ground-Target difference [mean: {gtdiff.mean(0)}]: \n{gtdiff}\n...")
     
     gface = counter_clockwise(gface)
+    logging.debug(f"Ground Face clockwise: {[is_clockwise(face) for face in gface[:n]]}")
     tface = counter_clockwise(tface)
+    logging.debug(f"Target Face clockwise: {[is_clockwise(face) for face in tface[:n]]}")
     
     garea = poly_area(gface[..., 0], gface[..., 1])
     logging.debug(f"Area1 [{garea.shape}, {garea.dtype}]: \n{garea[:n]}\n...")
