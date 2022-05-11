@@ -42,40 +42,48 @@ def calculate_metrics(
     metrics: Dict = defaultdict(dict)
 
     for key in gtindex.keys():
-        gtsample = gtendpoints[gtindex[key]]
-        tgsample = tgendpoints[tgindex.get(key, [])]
-
-        gtsample = gtsample.reshape(-1, 3)
-        if len(tgsample) == 0:
-            raise RuntimeError(f"Cannot find '{key}' class in the target data.")
-        tgsample = tgsample.reshape(-1, 3)
-
         metrics[key] = defaultdict(dict)
+
+        gtsample = gtendpoints[gtindex[key]]
+        gtsample = gtsample.reshape(-1, 3)
         metrics[key]["total"] = gtsample.shape[0]
+
+        tgsample = tgendpoints[tgindex.get(key, np.array([]))]
+        tgsample = tgsample.reshape(-1, 3)
         metrics[key]["predicted"] = tgsample.shape[0]
 
-        """ Returns linear assignment problem solution using scipy Hungarian implementation.
-            Cost function between verticies is defined in `calculate_cost_matrix` method.
-            Default: Euclidean distance (L2)."""
-        logging.debug(f"Calculating metrics for '{key}': {gtsample.shape[0]} over {tgsample.shape[0]} structures... Optimization: {config.enable_optimization}")
-        cost_matrix = calculate_cost_matrix(gtsample, tgsample)
-
         matches: Dict[List] = defaultdict(list)
-        logging.debug("Applying linear_sum_assignment...")
-        rows, cols = linear_sum_assignment(cost_matrix, maximize=False)
-        for row, col in list(zip(rows, cols)):
-            distance: float = cost_matrix[row, col]
+        if len(tgsample) == 0:
+            logging.warning(f"Cannot find '{key}' class in the target data for metrics matching.")
             for threshold in config.metrics_thresholds:
-                if distance < threshold:
-                    matches[threshold].append(distance)
+                matches[threshold] = []
+        else:
+            """ Returns linear assignment problem solution using scipy Hungarian implementation.
+                Cost function between verticies is defined in `calculate_cost_matrix` method.
+                Default: Euclidean distance (L2)."""
+            logging.debug(f"Calculating metrics for '{key}': {gtsample.shape[0]} over {tgsample.shape[0]} structures... Optimization: {config.enable_optimization}")
+            cost_matrix = calculate_cost_matrix(gtsample, tgsample)
+
+            logging.debug("Applying linear_sum_assignment...")
+            rows, cols = linear_sum_assignment(cost_matrix, maximize=False)
+            for row, col in list(zip(rows, cols)):
+                distance: float = cost_matrix[row, col]
+                for threshold in config.metrics_thresholds:
+                    if distance < threshold:
+                        matches[threshold].append(distance)
         
         metrics[key]["thresholds"] = {}
         for threshold, matched in matches.items():
             # Calculate metrics according to `compute_precision_recall_helper`:
             # https://github.com/seravee08/WarpingError_Floorplan/blob/main/IOU_precision_recall/ipynb/main.ipynb
-            precision: float = len(matched) / tgsample.shape[0]
-            recall: float = len(matched) / gtsample.shape[0]
-            f1: float = (2 * precision * recall) / (precision + recall)
+            if tgsample.size == 0:
+                precision: float = len(matched) / tgsample.shape[0]
+                recall: float = len(matched) / gtsample.shape[0]
+                f1: float = (2 * precision * recall) / (precision + recall)
+            else:
+                precision: float = .0
+                recall: float = .0
+                f1: float = .0
             metrics[key]["thresholds"][threshold] = {
                 "matched": len(matched),
                 "precision": precision,
@@ -96,10 +104,14 @@ def calculate_iou(
     """ Calculate IoU based on GT classes only."""
     for key in gtindex.keys():
         gtsample = gtendpoints[gtindex[key]]
-        tgsample = tgendpoints[tgindex.get(key, [])]
+        tgsample = tgendpoints[tgindex.get(key, np.array([]))]
 
-        logging.debug(f"Calculating 3D IoU for '{key}': {gtsample.shape[0]} over {tgsample.shape[0]} structures...")
-        iou3d = iou_batch(gtsample, tgsample)[0]
+        if tgsample.size != 0:
+            logging.debug(f"Calculating 3D IoU for '{key}': {gtsample.shape[0]} over {tgsample.shape[0]} structures...")
+            iou3d = iou_batch(gtsample, tgsample)[0]
+        else:
+            logging.warning(f"Cannot find '{key}' class in the target data for IoU matching.")
+            iou3d = np.array([[]])
 
         logging.debug("Applying linear_sum_assignment...")
         rows, cols = linear_sum_assignment(iou3d, maximize=True)

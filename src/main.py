@@ -57,6 +57,7 @@ def match(
 
             data["floors"][floor] = matching.match(gtstructures, tgstructures, output, model, floor)
 
+        # TODO: Encapsulate it & refactor
         iou, precision, recall, f1 = [], [], [], []
         iou_cls = defaultdict(list)
         precision_cls = defaultdict(list)
