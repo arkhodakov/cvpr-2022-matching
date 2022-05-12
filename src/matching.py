@@ -106,7 +106,7 @@ def calculate_iou(
         gtsample = gtendpoints[gtindex[key]]
         tgsample = tgendpoints[tgindex.get(key, np.array([]))]
 
-        if tgsample.size != 0:
+        if tgsample.shape[0] != 0:
             logging.debug(f"Calculating 3D IoU for '{key}': {gtsample.shape[0]} over {tgsample.shape[0]} structures...")
             iou3d = iou_batch(gtsample, tgsample)[0]
         else:
