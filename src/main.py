@@ -31,9 +31,9 @@ def match(
     output.mkdir(parents=True, exist_ok=True)
     logging.info("Reading the models..")
 
-    ground_files = loader.read_source(ref_data)
+    ground_files = loader.read_source(ref_data.resolve())
     logging.info(f"Found {len(ground_files.keys())} GT models: {list(ground_files.keys())}")
-    target_files = loader.read_source(user_data)
+    target_files = loader.read_source(user_data.resolve())
     logging.info(f"Found {len(target_files.keys())} Target models: {list(target_files.keys())}")
 
     for model in target_files.keys():
