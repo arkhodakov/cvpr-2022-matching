@@ -55,6 +55,8 @@ def calculate_metrics(
         matches: Dict[List] = defaultdict(list)
         if len(tgsample) == 0:
             logging.warning(f"Cannot find '{key}' class in the target data for metrics matching.")
+            logging.info(f"Available keys in ground data: {gtindex.keys()}")
+            logging.info(f"Available keys in target data: {tgindex.keys()}")
             for threshold in config.metrics_thresholds:
                 matches[threshold] = []
         else:
@@ -111,6 +113,8 @@ def calculate_iou(
             iou3d = iou_batch(gtsample, tgsample)[0]
         else:
             logging.warning(f"Cannot find '{key}' class in the target data for IoU matching.")
+            logging.info(f"Available keys in ground data: {gtindex.keys()}")
+            logging.info(f"Available keys in target data: {tgindex.keys()}")
             iou3d = np.array([[]])
 
         logging.debug("Applying linear_sum_assignment...")

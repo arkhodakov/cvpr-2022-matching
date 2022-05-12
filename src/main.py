@@ -45,12 +45,13 @@ def match(
 
         data = defaultdict(dict)
         for floor in tgdata.keys():
+            tgfloor = tgdata[floor]
             gtfloor = gtdata.get(floor)
             if gtfloor is None:
                 logging.error(f"Cannot find '{gtfloor}' floor in gt model '{model}'.")
             else:
                 logging.info(f"Matching '{model}', floor '{floor}'...")
-            tgfloor = tgdata[floor]
+                logging.info(f"Ground keys: {list(gtfloor.keys())}, target keys: {list(tgfloor.keys())}")
 
             gtstructures = loader.read_structures(gtfloor)
             tgstructures = loader.read_structures(tgfloor)
