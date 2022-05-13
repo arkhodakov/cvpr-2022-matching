@@ -67,7 +67,7 @@ def convex_hull_intersection(p1, p2):
         for j in range(len(p2)):
             inter_p = polygon_clip(p1[i], p2[j])
             if inter_p is not None:
-                hull_inter = ConvexHull(inter_p)
+                hull_inter = ConvexHull(inter_p, qhull_options="QJ Pp")
                 result[i, j] = hull_inter.volume
     return result
 
@@ -102,6 +102,9 @@ def iou_batch(
         iou: 3D bounding box IoU
         iou_2d: bird's eye view 2D bounding box IoU
     """
+    ground = ground.astype(np.float64)
+    target = target.astype(np.float64)
+
     minimal = np.min([ground.min(), target.min(), .0])
     ground -= minimal
     target -= minimal
@@ -109,7 +112,7 @@ def iou_batch(
 
     logging.debug(f"Identical: {np.array_equal(ground, target)}")
 
-    n: int = np.min([5, ground.shape[0], target.shape[0]])
+    n: int = np.min([30, ground.shape[0], target.shape[0]])
     gface = ground[:, :4][..., :2]
     logging.debug(f"Ground Face [{gface.shape}, {gface.dtype}]: \n{gface[:n]}")
     tface = target[:, :4][..., :2]
@@ -128,6 +131,7 @@ def iou_batch(
     logging.debug(f"Area2 [{tarea.shape}, {tarea.dtype}]: \n{tarea[:n]}\n...")
 
     inter_area = convex_hull_intersection(gface, tface)
+    logging.debug(f"Inter Area (initial) [{inter_area.shape}, {inter_area.dtype}]: \n{inter_area[:n]}\n...")
 
     intersection = np.argwhere(inter_area > 0)
     rows, cols = intersection[:, 0], intersection[:, 1]
@@ -137,7 +141,7 @@ def iou_batch(
     logging.debug(f"Inter Area [{inter_area.shape}, {inter_area.dtype}]: \n{inter_area[:n]}\n...")
     
     iou_2d = inter_area / (garea[rows] + tarea[cols] - inter_area)
-    logging.debug(f"2D IoU  [{iou_2d.shape}]: \n{iou_2d[:n]}\n...")
+    logging.debug(f"2D IoU  [{iou_2d.shape}, {iou_2d.dtype}]: \n{iou_2d[:n]}\n...")
 
     ground_filtered = ground[rows]
     target_filtered = target[cols]
@@ -148,14 +152,15 @@ def iou_batch(
     logging.debug(f"Difference [{difference.shape}, {difference.dtype}]: \n{difference[:n]}\n...")
 
     inter_vol = inter_area * difference
-    logging.debug(f"Inter Volume [{inter_vol.shape}]: \n{inter_vol[:n]}\n...")
+    logging.debug(f"Inter Volume [{inter_vol.shape}, {inter_vol.dtype}]: \n{inter_vol[:n]}\n...")
 
-    vol1 = volume(ground_filtered)
-    logging.debug(f"Ground Volume [{vol1.shape}]: \n{vol1[:n]}\n...")
-    vol2 = volume(target_filtered)
-    logging.debug(f"Target Volume [{vol2.shape}]: \n{vol2[:n]}\n...")
+    vol1 = np.array([ConvexHull(pts, qhull_options="QJ Pp").volume for pts in ground_filtered])
+    logging.debug(f"Ground Volume [{vol1.shape}, {vol1.dtype}]: \n{vol1[:n]}\n...")
+    vol2 = np.array([ConvexHull(pts, qhull_options="QJ Pp").volume for pts in target_filtered])
+    logging.debug(f"Target Volume [{vol2.shape}, {vol2.dtype}]: \n{vol2[:n]}\n...")
 
     iou_3d = np.zeros((ground.shape[0], target.shape[0]), dtype=np.float32)
     iou_3d[rows, cols] = inter_vol / (vol1 + vol2 - inter_vol)
+    iou_3d[iou_3d > 1.1] = 0
     logging.debug(f"3D IoU: \n{iou_3d}")
     return iou_3d, iou_2d

@@ -51,7 +51,10 @@ def match(
                 logging.error(f"Cannot find '{gtfloor}' floor in gt model '{model}'.")
             else:
                 logging.info(f"Matching '{model}', floor '{floor}'...")
-                logging.info(f"Ground keys: {list(gtfloor.keys())}, target keys: {list(tgfloor.keys())}")
+                gtcounter = dict(zip(list(gtfloor.keys()), [len(values) for values in gtfloor.values()]))
+                tgcounter = dict(zip(list(tgfloor.keys()), [len(values) for values in tgfloor.values()]))
+                logging.info(f"Ground keys: {gtcounter}")
+                logging.info(f"Target keys: {tgcounter}")
 
             gtstructures = loader.read_structures(gtfloor)
             tgstructures = loader.read_structures(tgfloor)

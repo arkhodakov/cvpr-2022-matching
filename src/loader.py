@@ -1,6 +1,7 @@
 import re
 import json
 import zipfile
+import logging
 import numpy as np
 
 from collections import defaultdict
@@ -77,8 +78,11 @@ def read_endpoints(structures: np.ndarray) -> Tuple[Dict, np.ndarray]:
         classname = structure[9]
         index.append(classname)
     endpoints = np.asarray(endpoints, dtype=np.float32)
-
     index = np.asarray(index, dtype=str)
+
+    sorted = np.argsort(index)
+    endpoints = endpoints[sorted]
+    index = index[sorted]
     
     unique, indices = np.unique(index, return_index=True)
     index = dict(zip(unique, np.split(np.arange(len(index)), indices[1:])))
@@ -116,7 +120,9 @@ def read_directory(source: Union[Path, str], pattern: str) -> Dict:
         if any([group is None for group in [model, floor, classname]]):
             raise RuntimeError(f"For file '{file}' one of the groups is None: {groups}")
         with open(file, "r", encoding="utf-8") as buffer:
-            data[model][floor][classname] = json.load(buffer)
+            structures = json.load(buffer)
+            logging.debug(f"  Loading {model}:{floor} - {classname}, found: {len(structures)} structures")
+            data[model][floor][classname] = structures
     return data
 
 def read_file(source: Union[Path, str], pattern: str) -> Dict:
@@ -141,7 +147,9 @@ def read_file(source: Union[Path, str], pattern: str) -> Dict:
             if any([group is None for group in [model, floor, classname]]):
                 raise RuntimeError(f"For file '{file}' one of the groups is None: {groups}")
             with open(file, "r", encoding="utf-8") as buffer:
-                data[model][floor][classname] = json.load(buffer)
+                structures = json.load(buffer)
+                logging.debug(f"  Loading {model}:{floor} - {classname}, found: {len(structures)} structures")
+                data[model][floor][classname] = structures
         return data
 
 def read_source(
