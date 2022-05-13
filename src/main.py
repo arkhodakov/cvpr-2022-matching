@@ -100,6 +100,10 @@ def match(
         logging.info("Matching data export...")
         with open(output.joinpath(f"{model}.json"), "w+", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4, cls=utils.NumpyArrayEncoder)
+        
+        with open(output.joinpath(f"scores.txt"), "w+") as file:
+            file.write("submitted:1")
+            file.close()
 
 if __name__ == "__main__":
     app()
