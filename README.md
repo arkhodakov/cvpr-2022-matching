@@ -21,7 +21,7 @@ Notes:
 
 ### Schemas
 
-``` json
+``` python
 """ Columns.
     Have only one location point and 3D measures:
         Width - X,
@@ -29,15 +29,15 @@ Notes:
         Height - Z.
     Rotation parameter is used to rotation the structure around Z-axis."""
 {
-    "width": 0.3047,    // Meters
+    "width": 0.3047,    # Meters
     "depth": 0.2031,
     "height": 2.7432,
     "loc": [
-        5.8154,         // X-axis
-        9.8700,         // Y-axis
-        0.0             // Z-axis
+        5.8154,         # X-axis
+        9.8700,         # Y-axis
+        0.0             # Z-axis
     ],
-    "rotation": 0.0     // Degrees
+    "rotation": 0.0     # Degrees
 }
 
 """ Doors.
@@ -80,8 +80,8 @@ Notes:
         17.7753,
         -0.9111
     ],
-    "width": 0.2032,    // X or Y-axis respectively.
-    "height": 3.9529,   // Z-axis
+    "width": 0.2032,    # X or Y-axis respectively.
+    "height": 3.9529,   # Z-axis
 }
 ```
 
