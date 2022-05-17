@@ -110,3 +110,8 @@ python main.py ../data/{reference_model}.json ../predicted/{user_model}.json --o
 # Example:
 python main.py ../data/OfficeLab01_Allfloors_columns.json ../predicted/OfficeLab01_Allfloors_columns.json --output output/match.json
 ```
+
+**Note**: you need to pass a directory path or a file path to the script.
+
+* When the path is a (like `./data`) directory the script searches for all models inside one level deep.
+* When the path is a file (like `*_columns.json`) the script uses regular expressions to extract the model name of the file. Then it searches for all the data for that model inside the directory. It means that if you pass `../data/OfficeLab01_Allfloors_columns.json` file to the script, it will search for all the files with `OfficeLab01` model name around.
