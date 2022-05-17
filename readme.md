@@ -4,24 +4,25 @@
 
 Classes **columns**, **doors**, **walls** are accepted and will be parsed.
 
-Files format regex:
+**Files format regex:**
 
 `(?P<model>.*)_(?P<floor>.*)_(?P<classname>columns|doors|walls).json`.
 
-Examples:
+**Examples:**
 
 `MedOffice_F1_doors.json`, `MedOffice_F2_columns.json`, `Minas_Tirith_Outerwall_walls.json`.
 
 All the files must be placed together in one directory or .zip archive.
 
-Notes:
+**Notes:**
 
 * Each JSON files is a List of structures (Dict).
 * All the measures, locations and points must be measured in meters! Rotation parameter measures in degrees.
+* All parameters are optional with 0 default value. You may not specify them
 
 ### Schemas
 
-``` json
+``` python
 """ Columns.
     Have only one location point and 3D measures:
         Width - X,
@@ -29,19 +30,20 @@ Notes:
         Height - Z.
     Rotation parameter is used to rotation the structure around Z-axis."""
 {
-    "width": 0.3047,    // Meters
-    "depth": 0.2031,
-    "height": 2.7432,
+    "width": 0.3047,    # Optional,
+    "depth": 0.2031,    # default
+    "height": 2.7432,   # is 0
     "loc": [
-        5.8154,         // X-axis
-        9.8700,         // Y-axis
-        0.0             // Z-axis
+        5.8154,         # X-axis
+        9.8700,         # Y-axis
+        0.0             # Z-axis
     ],
-    "rotation": 0.0     // Degrees
+    "rotation": 0.0     # Degrees (Optional: default is 0)
 }
 
 """ Doors.
-    The same schema as the one above."""
+    The same schema as the one above.
+    Translation and rotation parameters are optional."""
 {
     "width": 1.0668,
     "depth": 0.1778,
@@ -68,6 +70,7 @@ Notes:
     •-------------•
 
     Height measure for both points is assumed to be the same.
+    Translation parameters are optional.
 """
 {
     "start_pt": [
@@ -80,8 +83,8 @@ Notes:
         17.7753,
         -0.9111
     ],
-    "width": 0.2032,    // X or Y-axis respectively.
-    "height": 3.9529,   // Z-axis
+    "width": 0.2032,    # X or Y-axis respectively.
+    "height": 3.9529,   # Z-axis
 }
 ```
 
