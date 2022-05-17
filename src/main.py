@@ -43,7 +43,7 @@ def match(
             continue
         tgdata = target_files[model]
 
-        data = defaultdict(dict)
+        floors = {}
         for floor in tgdata.keys():
             tgfloor = tgdata[floor]
             gtfloor = gtdata.get(floor)
@@ -59,15 +59,16 @@ def match(
             gtstructures = loader.read_structures(gtfloor)
             tgstructures = loader.read_structures(tgfloor)
 
-            data["floors"][floor] = matching.match(gtstructures, tgstructures, output, model, floor)
+            floors[floor] = matching.match(gtstructures, tgstructures, output, model, floor)
 
+        data = defaultdict(dict)
         # TODO: Encapsulate it & refactor
         iou, precision, recall, f1 = [], [], [], []
         iou_cls = defaultdict(list)
         precision_cls = defaultdict(list)
         recall_cls = defaultdict(list)
         f1_cls = defaultdict(list)
-        for floor in data["floors"].values():
+        for floor in floors.values():
             for classname, ious in floor["ious"]["general"].items():
                 iou_cls[classname].append(ious["mean"])
                 iou.append(ious["mean"])
@@ -96,13 +97,26 @@ def match(
         data["recall"]["classes"] = recall_cls
         data["f1"]["global"] = f1
         data["f1"]["classes"] = f1_cls
+        data["floors"] = floors
 
         logging.info("Matching data export...")
         with open(output.joinpath(f"{model}.json"), "w+", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4, cls=utils.NumpyArrayEncoder)
         
         with open(output.joinpath(f"scores.txt"), "w+") as file:
-            file.write("submitted:1")
+            file.writelines("submitted: 1\n")
+            for key, value in precision_cls.items():
+                file.write(f"precision_{key}: {value}\n")
+            file.write(f"precision: {precision}\n")
+            for key, value in recall_cls.items():
+                file.write(f"recall_{key}: {value}\n")
+            file.write(f"recall: {recall}\n")
+            for key, value in f1_cls.items():
+                file.write(f"f1_{key}: {value}\n")
+            file.write(f"f1: {recall}\n")
+            for key, value in iou_cls.items():
+                file.write(f"iou_{key}: {value}\n")
+            file.write(f"iou: {iou}\n")
             file.close()
 
 if __name__ == "__main__":
