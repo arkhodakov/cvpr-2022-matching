@@ -36,6 +36,7 @@ def match(
     target_files = loader.read_source(user_data.resolve())
     logging.info(f"Found {len(target_files.keys())} Target models: {list(target_files.keys())}")
 
+    global_metrics = defaultdict(list)
     for model in target_files.keys():
         gtdata = ground_files.get(model)
         if gtdata is None:
@@ -102,22 +103,25 @@ def match(
         logging.info("Matching data export...")
         with open(output.joinpath(f"{model}.json"), "w+", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4, cls=utils.NumpyArrayEncoder)
-        
-        with open(output.joinpath(f"scores.txt"), "w+") as file:
-            file.writelines("submitted: 1\n")
-            for key, value in precision_cls.items():
-                file.write(f"precision_{key}: {value}\n")
-            file.write(f"precision: {precision}\n")
-            for key, value in recall_cls.items():
-                file.write(f"recall_{key}: {value}\n")
-            file.write(f"recall: {recall}\n")
-            for key, value in f1_cls.items():
-                file.write(f"f1_{key}: {value}\n")
-            file.write(f"f1: {recall}\n")
-            for key, value in iou_cls.items():
-                file.write(f"iou_{key}: {value}\n")
-            file.write(f"iou: {iou}\n")
-            file.close()
+
+        for key, value in precision_cls.items():
+            global_metrics[f"precision_{key}"].append(value)
+        global_metrics["precision"].append(precision)
+        for key, value in recall_cls.items():
+            global_metrics[f"recall_{key}"].append(value)
+        global_metrics["recall"].append(recall)
+        for key, value in f1_cls.items():
+            global_metrics[f"f1_{key}"].append(value)
+        global_metrics["f1"].append(f1)
+        for key, value in iou_cls.items():
+            global_metrics[f"iou_{key}"].append(value)
+        global_metrics["iou"].append(iou)
+
+    with open(output.joinpath(f"scores.txt"), "w+") as file:
+        file.write("submitted: 1\n")
+        for key, values in global_metrics.items():
+            file.write(f"{key}: {np.mean(values):.4f}\n")
+        file.close()
 
 if __name__ == "__main__":
     app()
