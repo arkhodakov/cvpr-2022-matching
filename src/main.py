@@ -115,6 +115,19 @@ def match(
         for classname, values in global_iou_output.items():
             file.write(f"{classname}_IoU: {np.mean(values):.2f}\n")
         file.close()
+    
+    with open(output.joinpath(f"scores.html"), "w+") as file:
+        file.write("<h1>Detailed Submission</h1>\n")
+        file.write("<h>\n")
+        file.write("submitted: 1<br>\n")
+        for name, thresholds in global_metrics_output.items():
+            for threshold, classnames in thresholds.items():
+                for classname, values in classnames.items():
+                    file.write(f"{threshold * 100:.0f}cm_{name}_{classname}: {np.mean(values):.2f}<br>\n")
+        for classname, values in global_iou_output.items():
+            file.write(f"{classname}_IoU: {np.mean(values):.2f}<br>\n")
+        file.write("</h>")
+        file.close()
 
 if __name__ == "__main__":
     app()
