@@ -7,7 +7,7 @@ enable_optimization: bool = True
 """ Normalize user's predictions with ground-truth no matter the initial vertices parameters are.
     Normalization includes rotation, scale, translation, ratios approximation.
     In the result data outputted all the differences will be specified."""
-enable_normalization: bool = True
+enable_normalization: bool = False
 
 """ Metrics (precision, recall, f1) and 3D IoU thresholds specified in ground-truth units.
     The maximum is also used as LAP threshold value where the L2 norm is the default measurement."""

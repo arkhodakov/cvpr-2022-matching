@@ -52,7 +52,8 @@ def match(
             tgfloor = tgdata[floor]
             gtfloor = gtdata.get(floor)
             if gtfloor is None:
-                logging.error(f"Cannot find '{gtfloor}' floor in gt model '{model}'.")
+                logging.error(f"Cannot find '{floor}' floor in gt model '{model}'.")
+                continue
             else:
                 logging.info(f"Matching '{model}', floor '{floor}'...")
                 gtcounter = dict(zip(list(gtfloor.keys()), [len(values) for values in gtfloor.values()]))
